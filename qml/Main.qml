@@ -75,10 +75,38 @@ Kirigami.ApplicationWindow {
                                 font.bold: true
                             }
 
-                            TextField {
+                            ComboBox {
+                                id: folderField
                                 Layout.fillWidth: true
-                                readOnly: true
-                                text: appBridge ? appBridge.selectedFolder : ""
+                                editable: true
+                                enabled: appBridge ? !appBridge.isScanning : false
+                                model: appBridge ? appBridge.recentFolders : []
+
+                                Component.onCompleted: {
+                                    if (appBridge)
+                                        editText = appBridge.selectedFolder
+                                }
+
+                                onAccepted: appBridge.setSelectedFolder(editText)
+                                onActivated: appBridge.setSelectedFolder(currentText)
+                                onActiveFocusChanged: {
+                                    if (!activeFocus && appBridge)
+                                        appBridge.setSelectedFolder(editText)
+                                }
+                            }
+
+                            Connections {
+                                target: appBridge
+
+                                function onSelectedFolderChanged() {
+                                    if (!folderField.activeFocus)
+                                        folderField.editText = appBridge.selectedFolder
+                                }
+
+                                function onRecentFoldersChanged() {
+                                    if (!folderField.activeFocus)
+                                        folderField.editText = appBridge.selectedFolder
+                                }
                             }
 
                             RowLayout {

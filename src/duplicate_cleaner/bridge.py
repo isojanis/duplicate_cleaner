@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Property, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Property, QSettings, QThread, Signal, Slot
 
 from .scanner import scan_for_duplicates
+
+RECENT_FOLDERS_KEY = "recentFolders"
+MAX_RECENT_FOLDERS = 10
 
 
 class ScanWorker(QObject):
@@ -38,6 +41,7 @@ class ScanWorker(QObject):
 
 class AppBridge(QObject):
     selectedFolderChanged = Signal()
+    recentFoldersChanged = Signal()
     statusTextChanged = Signal()
     duplicateGroupsChanged = Signal()
     scanSummaryChanged = Signal()
@@ -45,7 +49,9 @@ class AppBridge(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._selected_folder = str(Path.home())
+        self._settings = QSettings()
+        self._recent_folders = self._load_recent_folders()
+        self._selected_folder = self._recent_folders[0] if self._recent_folders else str(Path.home())
         self._status_text = "Choose a folder to begin."
         self._duplicate_groups: list[dict[str, object]] = []
         self._scan_summary: dict[str, object] = {
@@ -67,6 +73,43 @@ class AppBridge(QObject):
         self._scan_thread: QThread | None = None
         self._scan_worker: ScanWorker | None = None
 
+    def _load_recent_folders(self) -> list[str]:
+        value = self._settings.value(RECENT_FOLDERS_KEY, [])
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item)]
+        return []
+
+    def _save_recent_folders(self) -> None:
+        self._settings.setValue(RECENT_FOLDERS_KEY, self._recent_folders)
+
+    def _record_recent_folder(self, folder: str) -> None:
+        normalized = str(Path(folder).expanduser())
+        self._recent_folders = [path for path in self._recent_folders if path != normalized]
+        self._recent_folders.insert(0, normalized)
+        self._recent_folders = self._recent_folders[:MAX_RECENT_FOLDERS]
+        self._save_recent_folders()
+        self.recentFoldersChanged.emit()
+
+    def _reset_scan_summary(self, folder: str, phase: str) -> None:
+        self._scan_summary = {
+            "folder": folder,
+            "currentPath": folder,
+            "phase": phase,
+            "totalFiles": 0,
+            "totalFolders": 0,
+            "skippedFiles": 0,
+            "groupCount": 0,
+            "duplicateFiles": 0,
+            "liveGroupCount": 0,
+            "liveDuplicateFiles": 0,
+            "hashCandidates": 0,
+            "hashedFiles": 0,
+            "wastedBytes": 0,
+        }
+        self.scanSummaryChanged.emit()
+
     def get_selected_folder(self) -> str:
         return self._selected_folder
 
@@ -83,28 +126,22 @@ class AppBridge(QObject):
         self.selectedFolderChanged.emit()
         self._duplicate_groups = []
         self.duplicateGroupsChanged.emit()
-        self._scan_summary = {
-            "folder": normalized,
-            "currentPath": normalized,
-            "phase": "Ready",
-            "totalFiles": 0,
-            "totalFolders": 0,
-            "skippedFiles": 0,
-            "groupCount": 0,
-            "duplicateFiles": 0,
-            "liveGroupCount": 0,
-            "liveDuplicateFiles": 0,
-            "hashCandidates": 0,
-            "hashedFiles": 0,
-            "wastedBytes": 0,
-        }
-        self.scanSummaryChanged.emit()
+        self._reset_scan_summary(normalized, "Ready")
         self.setStatusText(f"Ready to scan: {normalized}")
 
     selectedFolder = Property(
         str,
         get_selected_folder,
         notify=selectedFolderChanged,
+    )
+
+    def get_recent_folders(self) -> list[str]:
+        return self._recent_folders
+
+    recentFolders = Property(
+        "QVariantList",
+        get_recent_folders,
+        notify=recentFoldersChanged,
     )
 
     def get_status_text(self) -> str:
@@ -260,24 +297,10 @@ class AppBridge(QObject):
             self.setStatusText(f"Selected path is not a folder: {folder}")
             return
 
+        self._record_recent_folder(str(folder))
         self._duplicate_groups = []
         self.duplicateGroupsChanged.emit()
-        self._scan_summary = {
-            "folder": str(folder),
-            "currentPath": str(folder),
-            "phase": "Starting",
-            "totalFiles": 0,
-            "totalFolders": 0,
-            "skippedFiles": 0,
-            "groupCount": 0,
-            "duplicateFiles": 0,
-            "liveGroupCount": 0,
-            "liveDuplicateFiles": 0,
-            "hashCandidates": 0,
-            "hashedFiles": 0,
-            "wastedBytes": 0,
-        }
-        self.scanSummaryChanged.emit()
+        self._reset_scan_summary(str(folder), "Starting")
         self.setStatusText(f"Starting scan in {folder}...")
 
         self._scan_thread = QThread(self)
