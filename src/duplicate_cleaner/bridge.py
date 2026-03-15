@@ -75,8 +75,6 @@ class AppBridge(QObject):
             "skippedFiles": 0,
             "groupCount": 0,
             "duplicateFiles": 0,
-            "liveGroupCount": 0,
-            "liveDuplicateFiles": 0,
             "hashCandidates": 0,
             "hashedFiles": 0,
             "wastedBytes": 0,
@@ -114,8 +112,6 @@ class AppBridge(QObject):
             "skippedFiles": 0,
             "groupCount": 0,
             "duplicateFiles": 0,
-            "liveGroupCount": 0,
-            "liveDuplicateFiles": 0,
             "hashCandidates": 0,
             "hashedFiles": 0,
             "wastedBytes": 0,
@@ -318,8 +314,8 @@ class AppBridge(QObject):
             "totalFiles": progress["totalFiles"],
             "totalFolders": progress["totalFolders"],
             "skippedFiles": progress["skippedFiles"],
-            "liveGroupCount": progress["liveGroupCount"],
-            "liveDuplicateFiles": progress["liveDuplicateFiles"],
+            "groupCount": progress["liveGroupCount"],
+            "duplicateFiles": progress["liveDuplicateFiles"],
             "hashCandidates": progress["hashCandidates"],
             "hashedFiles": progress["hashedFiles"],
         }
@@ -331,7 +327,7 @@ class AppBridge(QObject):
         )
         if progress["liveGroupCount"]:
             status += (
-                f" Live duplicates: {progress['liveGroupCount']} groups / "
+                f" Found duplicates: {progress['liveGroupCount']} groups / "
                 f"{progress['liveDuplicateFiles']} files."
             )
         self.setStatusText(status)
@@ -350,8 +346,6 @@ class AppBridge(QObject):
             "skippedFiles": results["skippedFiles"],
             "groupCount": results["groupCount"],
             "duplicateFiles": results["duplicateFiles"],
-            "liveGroupCount": results["groupCount"],
-            "liveDuplicateFiles": results["duplicateFiles"],
             "hashCandidates": self._scan_summary.get("hashCandidates", 0),
             "hashedFiles": self._scan_summary.get("hashedFiles", 0),
             "wastedBytes": results["wastedBytes"],

@@ -53,15 +53,160 @@ Kirigami.ApplicationWindow {
             anchors.margins: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.largeSpacing
 
-            Kirigami.InlineMessage {
+            Frame {
                 Layout.fillWidth: true
-                text: "Scan a folder, browse duplicate groups in the middle, and click any file path to preview that exact file on the right."
-                type: Kirigami.MessageType.Information
-                visible: true
+                Layout.minimumHeight: 200
+                padding: 0
+                background: Rectangle {
+                    color: Kirigami.Theme.backgroundColor
+                    radius: 12
+                    border.color: Kirigami.Theme.disabledTextColor
+                    border.width: 1
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
+                    spacing: Kirigami.Units.largeSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.largeSpacing
+
+                        Label {
+                            text: "Scan folder"
+                            font.pointSize: 16
+                            font.bold: true
+                        }
+
+                        ComboBox {
+                            id: folderField
+                            Layout.fillWidth: true
+                            editable: true
+                            enabled: appBridge ? !appBridge.isScanning : false
+                            model: appBridge ? appBridge.recentFolders : []
+
+                            Component.onCompleted: {
+                                if (appBridge)
+                                    editText = appBridge.selectedFolder
+                            }
+
+                            onAccepted: appBridge.setSelectedFolder(editText)
+                            onActivated: appBridge.setSelectedFolder(currentText)
+                            onActiveFocusChanged: {
+                                if (!activeFocus && appBridge)
+                                    appBridge.setSelectedFolder(editText)
+                            }
+                        }
+
+                        Button {
+                            text: "Choose folder"
+                            enabled: appBridge ? !appBridge.isScanning : false
+                            onClicked: folderDialog.open()
+                        }
+
+                        Button {
+                            text: appBridge && appBridge.isScanning ? "Stop scan" : "Start scan"
+                            highlighted: true
+                            onClicked: appBridge.startScan()
+                        }
+                    }
+
+                    Connections {
+                        target: appBridge
+
+                        function onSelectedFolderChanged() {
+                            if (!folderField.activeFocus)
+                                folderField.editText = appBridge.selectedFolder
+                        }
+
+                        function onRecentFoldersChanged() {
+                            if (!folderField.activeFocus)
+                                folderField.editText = appBridge.selectedFolder
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.largeSpacing
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            Label {
+                                text: appBridge && appBridge.isScanning ? "Live scan status" : "Scan summary"
+                                font.pointSize: 16
+                                font.bold: true
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: appBridge ? appBridge.statusText : "Loading..."
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                visible: appBridge ? appBridge.isScanning : false
+                                wrapMode: Text.WrapAnywhere
+                                text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
+                                color: Kirigami.Theme.disabledTextColor
+                            }
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
+                            spacing: Kirigami.Units.largeSpacing
+
+                            Repeater {
+                                model: [
+                                    { label: "Files scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFiles : 0) },
+                                    { label: "Folders scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFolders : 0) },
+                                    { label: "Skipped unreadable", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles : 0) },
+                                    { label: "Duplicate groups", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.groupCount : 0) },
+                                    { label: "Duplicate files", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.duplicateFiles : 0) },
+                                    { label: "Hash progress", value: appBridge && appBridge.scanSummary ? String(appBridge.scanSummary.hashedFiles) + " / " + String(appBridge.scanSummary.hashCandidates) : "0 / 0" },
+                                                                                                            { label: "Wasted space", value: root.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
+                                ]
+
+                                delegate: Rectangle {
+                                    required property var modelData
+
+                                    implicitWidth: Math.max(132, statsColumn.implicitWidth + Kirigami.Units.smallSpacing * 2)
+                                    height: statsColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
+                                    radius: 8
+                                    color: Kirigami.Theme.alternateBackgroundColor
+                                    border.color: Kirigami.Theme.disabledTextColor
+                                    border.width: 1
+
+                                    Column {
+                                        id: statsColumn
+                                        anchors.fill: parent
+                                        anchors.margins: Kirigami.Units.smallSpacing
+                                        spacing: 2
+
+                                        Label {
+                                            wrapMode: Text.WordWrap
+                                            text: modelData.label
+                                            color: Kirigami.Theme.disabledTextColor
+                                        }
+
+                                        Label {
+                                            wrapMode: Text.WordWrap
+                                            font.bold: true
+                                            text: modelData.value
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             SplitView {
-                id: workspaceSplit
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 orientation: Qt.Horizontal
@@ -73,158 +218,9 @@ Kirigami.ApplicationWindow {
                 }
 
                 Frame {
-                    SplitView.preferredWidth: 340
-                    SplitView.minimumWidth: 280
-                    SplitView.maximumWidth: 460
-                    padding: 0
-                    background: Rectangle {
-                        color: Kirigami.Theme.backgroundColor
-                        radius: 12
-                        border.color: Kirigami.Theme.disabledTextColor
-                        border.width: 1
-                    }
-
-                    ScrollView {
-                        id: leftPaneScroll
-                        anchors.fill: parent
-                        anchors.margins: 1
-                        clip: true
-
-                        ColumnLayout {
-                            x: Kirigami.Units.largeSpacing
-                            y: Kirigami.Units.largeSpacing
-                            width: Math.max(0, leftPaneScroll.availableWidth - Kirigami.Units.largeSpacing * 2)
-                            spacing: Kirigami.Units.largeSpacing
-
-                            Label {
-                                text: "Scan folder"
-                                font.pointSize: 16
-                                font.bold: true
-                            }
-
-                            ComboBox {
-                                id: folderField
-                                Layout.fillWidth: true
-                                editable: true
-                                enabled: appBridge ? !appBridge.isScanning : false
-                                model: appBridge ? appBridge.recentFolders : []
-
-                                Component.onCompleted: {
-                                    if (appBridge)
-                                        editText = appBridge.selectedFolder
-                                }
-
-                                onAccepted: appBridge.setSelectedFolder(editText)
-                                onActivated: appBridge.setSelectedFolder(currentText)
-                                onActiveFocusChanged: {
-                                    if (!activeFocus && appBridge)
-                                        appBridge.setSelectedFolder(editText)
-                                }
-                            }
-
-                            Connections {
-                                target: appBridge
-
-                                function onSelectedFolderChanged() {
-                                    if (!folderField.activeFocus)
-                                        folderField.editText = appBridge.selectedFolder
-                                }
-
-                                function onRecentFoldersChanged() {
-                                    if (!folderField.activeFocus)
-                                        folderField.editText = appBridge.selectedFolder
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-
-                                Button {
-                                    text: "Choose folder"
-                                    enabled: appBridge ? !appBridge.isScanning : false
-                                    onClicked: folderDialog.open()
-                                }
-
-                                Button {
-                                    text: appBridge && appBridge.isScanning ? "Stop scan" : "Start scan"
-                                    highlighted: true
-                                    onClicked: appBridge.startScan()
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                color: Kirigami.Theme.alternateBackgroundColor
-                                radius: 10
-                                border.color: Kirigami.Theme.disabledTextColor
-                                border.width: 1
-                                implicitHeight: summaryColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
-
-                                ColumnLayout {
-                                    id: summaryColumn
-                                    anchors.fill: parent
-                                    anchors.margins: Kirigami.Units.largeSpacing
-                                    spacing: Kirigami.Units.smallSpacing
-
-                                    Label {
-                                        text: appBridge && appBridge.isScanning ? "Live scan status" : "Scan summary"
-                                        font.pointSize: 16
-                                        font.bold: true
-                                    }
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                        text: appBridge ? appBridge.statusText : "Loading..."
-                                    }
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        visible: appBridge ? appBridge.isScanning : false
-                                        wrapMode: Text.WrapAnywhere
-                                        text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
-                                        color: Kirigami.Theme.disabledTextColor
-                                    }
-
-                                    GridLayout {
-                                        Layout.fillWidth: true
-                                        columns: 2
-                                        columnSpacing: Kirigami.Units.largeSpacing
-                                        rowSpacing: Kirigami.Units.smallSpacing
-
-                                        Label { text: "Files scanned" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFiles : 0) }
-                                        Label { text: "Folders scanned" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFolders : 0) }
-                                        Label { text: "Skipped unreadable" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles : 0) }
-                                        Label { text: "Live duplicate groups" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.liveGroupCount : 0) }
-                                        Label { text: "Live duplicate files" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.liveDuplicateFiles : 0) }
-                                        Label { text: "Hash progress" }
-                                        Label {
-                                            text: appBridge && appBridge.scanSummary
-                                                ? String(appBridge.scanSummary.hashedFiles) + " / " + String(appBridge.scanSummary.hashCandidates)
-                                                : "0 / 0"
-                                        }
-                                        Label { text: "Final groups" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.groupCount : 0) }
-                                        Label { text: "Final duplicate files" }
-                                        Label { text: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.duplicateFiles : 0) }
-                                        Label { text: "Wasted space" }
-                                        Label { text: root.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Frame {
                     SplitView.fillWidth: true
-                    SplitView.preferredWidth: 520
-                    SplitView.minimumWidth: 360
+                    SplitView.preferredWidth: 700
+                    SplitView.minimumWidth: 380
                     padding: 0
                     background: Rectangle {
                         color: Kirigami.Theme.backgroundColor
@@ -308,12 +304,6 @@ Kirigami.ApplicationWindow {
                                             }
                                         }
 
-                                        Label {
-                                            Layout.fillWidth: true
-                                            color: Kirigami.Theme.disabledTextColor
-                                            text: "Recoverable space: " + root.formatBytes(modelData.wastedBytes)
-                                        }
-
                                         Repeater {
                                             model: modelData.files
 
@@ -353,9 +343,9 @@ Kirigami.ApplicationWindow {
                 }
 
                 Frame {
-                    SplitView.preferredWidth: 520
-                    SplitView.minimumWidth: 380
-                    SplitView.maximumWidth: 780
+                    SplitView.preferredWidth: 560
+                    SplitView.minimumWidth: 400
+                    SplitView.maximumWidth: 840
                     padding: 0
                     background: Rectangle {
                         color: Kirigami.Theme.backgroundColor
