@@ -8,8 +8,11 @@ version = "0.1.0"
 description = "KDE-friendly duplicate file cleaner built with PySide6 and Kirigami."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-  "PySide6>=6.7",
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "debugpy>=1.8",
 ]
 
 [tool.setuptools]

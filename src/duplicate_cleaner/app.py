@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo
-from PySide6.QtCore import QLibraryInfo
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -29,7 +28,6 @@ def main() -> int:
 
     engine = QQmlApplicationEngine()
 
-    # PySide wheels may not include distro QML paths, so add common Linux Qt6 import roots.
     qt_qml_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath)
     if qt_qml_path:
         engine.addImportPath(qt_qml_path)
@@ -38,7 +36,7 @@ def main() -> int:
         if Path(import_path).exists():
             engine.addImportPath(import_path)
 
-    bridge = AppBridge()
+    bridge = AppBridge(parent=engine)
     engine.rootContext().setContextProperty("appBridge", bridge)
     engine.load(str(qml_path))
 

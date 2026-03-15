@@ -9,12 +9,14 @@ A starter KDE-friendly desktop app for finding and deleting duplicate files.
 - Qt Quick / QML
 - Kirigami
 
-## Run in VS Code or terminal
+## Stable host setup
 
-1. Create a virtual environment:
+This project should use the host system Qt/Kirigami stack together with a local virtual environment for Python-only tooling. Avoid installing `PySide6` from pip here, because the wheel can conflict with the host Kirigami plugin ABI.
+
+1. Create the virtual environment with system site packages:
 
 ```bash
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 ```
 
 2. Activate it:
@@ -23,17 +25,25 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install dependencies:
+3. Ensure pip is available and install the local tooling:
 
 ```bash
-pip install -e .
+python -m ensurepip --upgrade
+pip install debugpy
+pip install -e . --no-deps
 ```
 
 4. Launch the app:
 
 ```bash
-python -m duplicate_cleaner
+PYTHONPATH=src python -m duplicate_cleaner
 ```
+
+## VS Code
+
+- Interpreter: `${workspaceFolder}/.venv/bin/python`
+- Use the `Bootstrap Duplicate Cleaner (Host)` task once after recreating `.venv`.
+- `Run Duplicate Cleaner (Host)` and `Debug Duplicate Cleaner (Host)` now auto-install `debugpy` if it is missing.
 
 ## Notes
 

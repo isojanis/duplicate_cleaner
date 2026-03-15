@@ -2,6 +2,22 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Bootstrap Duplicate Cleaner (Host)",
+      "type": "shell",
+      "command": "flatpak-spawn",
+      "args": [
+        "--host",
+        "sh",
+        "-lc",
+        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && .venv/bin/python -m ensurepip --upgrade && .venv/bin/python -m pip install debugpy && .venv/bin/python -m pip install -e . --no-deps"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Run Duplicate Cleaner (Host)",
       "type": "shell",
       "command": "flatpak-spawn",
@@ -9,7 +25,7 @@
         "--host",
         "sh",
         "-lc",
-        "cd /home/isojanis/development/duplicate_cleaner && source .venv/bin/activate && python -m duplicate_cleaner"
+        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -m duplicate_cleaner"
       ],
       "presentation": {
         "reveal": "always",
@@ -25,7 +41,7 @@
         "--host",
         "sh",
         "-lc",
-        "cd /home/isojanis/development/duplicate_cleaner && source .venv/bin/activate && PYTHONPATH=src .venv/bin/python -Xfrozen_modules=off /home/isojanis/development/duplicate_cleaner/.vscode/debug_host.py"
+        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -Xfrozen_modules=off /home/isojanis/development/duplicate_cleaner/.vscode/debug_host.py"
       ],
       "isBackground": true,
       "presentation": {
