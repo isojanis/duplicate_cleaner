@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Duplicate Cleaner (Host)",
+      "type": "shell",
+      "command": "flatpak-spawn",
+      "args": [
+        "--host",
+        "sh",
+        "-lc",
+        "cd /home/isojanis/development/duplicate_cleaner && source .venv/bin/activate && python -m duplicate_cleaner"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Debug Duplicate Cleaner (Host)",
+      "type": "shell",
+      "command": "flatpak-spawn",
+      "args": [
+        "--host",
+        "sh",
+        "-lc",
+        "cd /home/isojanis/development/duplicate_cleaner && source .venv/bin/activate && PYTHONPATH=src .venv/bin/python -Xfrozen_modules=off /home/isojanis/development/duplicate_cleaner/.vscode/debug_host.py"
+      ],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "python",
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1,
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "debugpy-ready"
+        }
+      }
+    }
+  ]
+}

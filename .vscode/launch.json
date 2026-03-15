@@ -2,14 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Duplicate Cleaner",
+      "name": "Duplicate Cleaner (Host Debug)",
       "type": "debugpy",
-      "request": "launch",
-      "module": "duplicate_cleaner",
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+      "request": "attach",
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5678
       },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/home/isojanis/development/duplicate_cleaner"
+        }
+      ],
+      "preLaunchTask": "Debug Duplicate Cleaner (Host)",
       "justMyCode": true
     }
   ]
