@@ -35,9 +35,13 @@ def _cancelled_result(
     total_folders: int,
     skipped_files: int,
     current_path: str,
-    live_group_count: int,
-    live_duplicate_files: int,
+    groups: list[dict[str, object]],
 ) -> dict[str, object]:
+    sorted_groups = sorted(
+        groups,
+        key=lambda group: (group["wastedBytes"], group["count"]),
+        reverse=True,
+    )
     return {
         "cancelled": True,
         "folder": str(folder),
@@ -45,11 +49,30 @@ def _cancelled_result(
         "totalFiles": total_files,
         "totalFolders": total_folders,
         "skippedFiles": skipped_files,
-        "groupCount": live_group_count,
-        "duplicateFiles": live_duplicate_files,
-        "wastedBytes": 0,
-        "groups": [],
+        "groupCount": len(sorted_groups),
+        "duplicateFiles": sum(group["count"] for group in sorted_groups),
+        "wastedBytes": sum(group["wastedBytes"] for group in sorted_groups),
+        "groups": sorted_groups,
     }
+
+
+def _matching_groups_for_size(size: int, files_by_hash: dict[str, list[Path]]) -> list[dict[str, object]]:
+    duplicate_groups: list[dict[str, object]] = []
+    for matching_paths in files_by_hash.values():
+        if len(matching_paths) < 2:
+            continue
+
+        sorted_paths = sorted(matching_paths)
+        duplicate_groups.append(
+            {
+                "count": len(sorted_paths),
+                "sizeBytes": size,
+                "wastedBytes": size * (len(sorted_paths) - 1),
+                "files": [str(path) for path in sorted_paths],
+            }
+        )
+
+    return duplicate_groups
 
 
 def scan_for_duplicates(
@@ -137,8 +160,7 @@ def scan_for_duplicates(
                 total_folders=total_folders,
                 skipped_files=skipped_files,
                 current_path=current_path,
-                live_group_count=live_group_count,
-                live_duplicate_files=live_duplicate_files,
+                groups=[],
             )
 
         total_folders += 1
@@ -153,8 +175,7 @@ def scan_for_duplicates(
                     total_folders=total_folders,
                     skipped_files=skipped_files,
                     current_path=current_path,
-                    live_group_count=live_group_count,
-                    live_duplicate_files=live_duplicate_files,
+                    groups=[],
                 )
 
             path = current_root / filename
@@ -211,8 +232,7 @@ def scan_for_duplicates(
                     total_folders=total_folders,
                     skipped_files=skipped_files,
                     current_path=current_path,
-                    live_group_count=live_group_count,
-                    live_duplicate_files=live_duplicate_files,
+                    groups=duplicate_groups + _matching_groups_for_size(size, files_by_hash),
                 )
 
             current_path = str(path)
@@ -230,8 +250,7 @@ def scan_for_duplicates(
                     total_folders=total_folders,
                     skipped_files=skipped_files,
                     current_path=current_path,
-                    live_group_count=live_group_count,
-                    live_duplicate_files=live_duplicate_files,
+                    groups=duplicate_groups + _matching_groups_for_size(size, files_by_hash),
                 )
 
             files_by_hash[file_hash].append(path)
@@ -245,19 +264,7 @@ def scan_for_duplicates(
             hashed_files += 1
             emit_progress("Hashing duplicate candidates...")
 
-        for matching_paths in files_by_hash.values():
-            if len(matching_paths) < 2:
-                continue
-
-            sorted_paths = sorted(matching_paths)
-            duplicate_groups.append(
-                {
-                    "count": len(sorted_paths),
-                    "sizeBytes": size,
-                    "wastedBytes": size * (len(sorted_paths) - 1),
-                    "files": [str(path) for path in sorted_paths],
-                }
-            )
+        duplicate_groups.extend(_matching_groups_for_size(size, files_by_hash))
 
         if search_limit_reached:
             duplicate_groups.sort(

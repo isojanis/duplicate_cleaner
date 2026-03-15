@@ -374,12 +374,16 @@ Kirigami.ApplicationWindow {
                             color: Kirigami.Theme.disabledTextColor
                         }
 
-                        Flow {
+                        GridLayout {
+                            id: liveScanStatsGrid
                             Layout.fillWidth: true
                             visible: root.scanSummaryExpanded
-                            spacing: Kirigami.Units.smallSpacing
+                            columns: Math.max(1, Math.min(statRepeater.count, Math.floor((width + columnSpacing) / 170)))
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
 
                             Repeater {
+                                id: statRepeater
                                 model: [
                                     { label: "Files scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFiles : 0) },
                                     { label: "Folders scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFolders : 0) },
@@ -393,8 +397,9 @@ Kirigami.ApplicationWindow {
                                 delegate: Rectangle {
                                     required property var modelData
 
-                                    implicitWidth: Math.max(132, statsColumn.implicitWidth + Kirigami.Units.smallSpacing * 2)
-                                    height: statsColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: Math.max(140, (liveScanStatsGrid.width - liveScanStatsGrid.columnSpacing * Math.max(0, liveScanStatsGrid.columns - 1)) / liveScanStatsGrid.columns)
+                                    implicitHeight: statsColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
                                     radius: 6
                                     color: Kirigami.Theme.alternateBackgroundColor
                                     border.color: Kirigami.Theme.disabledTextColor

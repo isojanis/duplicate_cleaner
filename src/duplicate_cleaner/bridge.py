@@ -924,11 +924,18 @@ class AppBridge(QObject):
         self.scanSummaryChanged.emit()
 
         if results["cancelled"]:
-            self.setStatusText(
-                "Scan stopped. "
-                f"Visited {results['totalFiles']} files across {results['totalFolders']} folders, "
-                f"skipped {results['skippedFiles']}."
-            )
+            if results["groupCount"]:
+                self.setStatusText(
+                    "Scan stopped. Showing partial results: "
+                    f"{results['groupCount']} groups from {results['totalFiles']} files across "
+                    f"{results['totalFolders']} folders, with {results['skippedFiles']} skipped."
+                )
+            else:
+                self.setStatusText(
+                    "Scan stopped. "
+                    f"Visited {results['totalFiles']} files across {results['totalFolders']} folders, "
+                    f"skipped {results['skippedFiles']}."
+                )
         elif results["groupCount"]:
             if results.get("searchLimitReached"):
                 self.setStatusText(
