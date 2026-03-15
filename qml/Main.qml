@@ -75,24 +75,24 @@ Kirigami.ApplicationWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
-            spacing: Kirigami.Units.smallSpacing
+            anchors.margins: Kirigami.Units.smallSpacing / 2
+            spacing: Kirigami.Units.smallSpacing / 2
 
             Frame {
                 Layout.fillWidth: true
-                Layout.minimumHeight: root.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? 170 : 86
+                Layout.minimumHeight: root.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? 156 : 76
                 padding: 0
                 background: Rectangle {
                     color: Kirigami.Theme.backgroundColor
-                    radius: 12
+                    radius: 8
                     border.color: Kirigami.Theme.disabledTextColor
                     border.width: 1
                 }
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: Kirigami.Units.smallSpacing
-                    spacing: Kirigami.Units.smallSpacing
+                    anchors.margins: Kirigami.Units.smallSpacing / 2
+                    spacing: Kirigami.Units.smallSpacing / 2
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -191,23 +191,40 @@ Kirigami.ApplicationWindow {
                         visible: root.scanSummaryExpanded || (appBridge && appBridge.isScanning)
                         spacing: Kirigami.Units.smallSpacing
 
-                        Flow {
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: Kirigami.Units.largeSpacing
+                            columns: 2
+                            columnSpacing: Kirigami.Units.largeSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
 
-                            CheckBox {
-                                text: "Ignore empty files"
-                                checked: appBridge ? appBridge.ignoreEmptyFiles : true
-                                onToggled: if (appBridge) appBridge.setIgnoreEmptyFiles(checked)
-                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
 
-                            CheckBox {
-                                text: "Include sub-folders"
-                                checked: appBridge ? appBridge.includeSubfolders : true
-                                onToggled: if (appBridge) appBridge.setIncludeSubfolders(checked)
+                                CheckBox {
+                                    text: "Ignore empty files"
+                                    checked: appBridge ? appBridge.ignoreEmptyFiles : true
+                                    onToggled: if (appBridge) appBridge.setIgnoreEmptyFiles(checked)
+                                }
+
+                                Item { Layout.fillWidth: true }
                             }
 
                             RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+
+                                CheckBox {
+                                    text: "Include sub-folders"
+                                    checked: appBridge ? appBridge.includeSubfolders : true
+                                    onToggled: if (appBridge) appBridge.setIncludeSubfolders(checked)
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
@@ -219,7 +236,7 @@ Kirigami.ApplicationWindow {
                                 Label { text: "Min" }
 
                                 TextField {
-                                    Layout.preferredWidth: 88
+                                    Layout.preferredWidth: 84
                                     enabled: appBridge ? appBridge.limitFileSizeRange : false
                                     hoverEnabled: true
                                     text: root.minFileSizeText
@@ -233,7 +250,7 @@ Kirigami.ApplicationWindow {
                                 Label { text: "Max" }
 
                                 TextField {
-                                    Layout.preferredWidth: 88
+                                    Layout.preferredWidth: 84
                                     enabled: appBridge ? appBridge.limitFileSizeRange : false
                                     hoverEnabled: true
                                     text: root.maxFileSizeText
@@ -246,6 +263,7 @@ Kirigami.ApplicationWindow {
                             }
 
                             RowLayout {
+                                Layout.fillWidth: true
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
@@ -255,7 +273,7 @@ Kirigami.ApplicationWindow {
                                 }
 
                                 TextField {
-                                    Layout.preferredWidth: 88
+                                    Layout.preferredWidth: 84
                                     enabled: appBridge ? appBridge.useDuplicateSearchLimit : false
                                     hoverEnabled: true
                                     text: root.duplicateSearchLimitText
@@ -268,6 +286,7 @@ Kirigami.ApplicationWindow {
                             }
 
                             RowLayout {
+                                Layout.fillWidth: true
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
@@ -281,9 +300,12 @@ Kirigami.ApplicationWindow {
                                     enabled: appBridge ? appBridge.useIgnoreFolderPatterns : false
                                     onClicked: ignoreFoldersDialog.open()
                                 }
+
+                                Item { Layout.fillWidth: true }
                             }
 
                             RowLayout {
+                                Layout.fillWidth: true
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
@@ -297,9 +319,12 @@ Kirigami.ApplicationWindow {
                                     enabled: appBridge ? appBridge.useIgnoreFileExtensions : false
                                     onClicked: ignoreExtensionsDialog.open()
                                 }
+
+                                Item { Layout.fillWidth: true }
                             }
 
                             RowLayout {
+                                Layout.fillWidth: true
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
@@ -309,7 +334,7 @@ Kirigami.ApplicationWindow {
                                 }
 
                                 TextField {
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 96
                                     enabled: appBridge ? appBridge.useOnlySearchFileExtension : false
                                     hoverEnabled: true
                                     text: root.onlySearchFileExtensionText
@@ -324,7 +349,7 @@ Kirigami.ApplicationWindow {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: Kirigami.Units.largeSpacing
+                            spacing: Kirigami.Units.smallSpacing
 
                             Label {
                                 text: appBridge && appBridge.isScanning ? "Live scan status" : "Scan summary"
@@ -352,7 +377,7 @@ Kirigami.ApplicationWindow {
                         Flow {
                             Layout.fillWidth: true
                             visible: root.scanSummaryExpanded
-                            spacing: Kirigami.Units.largeSpacing
+                            spacing: Kirigami.Units.smallSpacing
 
                             Repeater {
                                 model: [
@@ -370,7 +395,7 @@ Kirigami.ApplicationWindow {
 
                                     implicitWidth: Math.max(132, statsColumn.implicitWidth + Kirigami.Units.smallSpacing * 2)
                                     height: statsColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
-                                    radius: 8
+                                    radius: 6
                                     color: Kirigami.Theme.alternateBackgroundColor
                                     border.color: Kirigami.Theme.disabledTextColor
                                     border.width: 1
@@ -418,7 +443,7 @@ Kirigami.ApplicationWindow {
                     padding: 0
                     background: Rectangle {
                         color: Kirigami.Theme.backgroundColor
-                        radius: 12
+                        radius: 8
                         border.color: Kirigami.Theme.disabledTextColor
                         border.width: 1
                     }
@@ -430,10 +455,10 @@ Kirigami.ApplicationWindow {
                         clip: true
 
                         ColumnLayout {
-                            x: Kirigami.Units.largeSpacing
-                            y: Kirigami.Units.largeSpacing
-                            width: Math.max(0, resultsPaneScroll.availableWidth - Kirigami.Units.largeSpacing * 2)
-                            spacing: Kirigami.Units.largeSpacing
+                            x: Kirigami.Units.smallSpacing
+                            y: Kirigami.Units.smallSpacing
+                            width: Math.max(0, resultsPaneScroll.availableWidth - Kirigami.Units.smallSpacing * 2)
+                            spacing: Kirigami.Units.smallSpacing
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -500,7 +525,7 @@ Kirigami.ApplicationWindow {
 
                                     Layout.fillWidth: true
                                     color: Kirigami.Theme.alternateBackgroundColor
-                                    radius: 10
+                                    radius: 8
                                     border.color: Kirigami.Theme.disabledTextColor
                                     border.width: 1
                                     implicitHeight: duplicateCard.implicitHeight + Kirigami.Units.largeSpacing * 2
@@ -508,7 +533,7 @@ Kirigami.ApplicationWindow {
                                     ColumnLayout {
                                         id: duplicateCard
                                         anchors.fill: parent
-                                        anchors.margins: Kirigami.Units.largeSpacing
+                                        anchors.margins: Kirigami.Units.smallSpacing
                                         spacing: Kirigami.Units.smallSpacing
 
                                         RowLayout {
@@ -537,7 +562,7 @@ Kirigami.ApplicationWindow {
                                                 color: appBridge && appBridge.previewData && appBridge.previewData.path === modelData
                                                     ? Kirigami.Theme.highlightColor
                                                     : "transparent"
-                                                radius: 6
+                                                radius: 4
                                                 implicitHeight: fileLabel.implicitHeight + Kirigami.Units.smallSpacing * 2
 
                                                 Label {
@@ -615,15 +640,15 @@ Kirigami.ApplicationWindow {
                     padding: 0
                     background: Rectangle {
                         color: Kirigami.Theme.backgroundColor
-                        radius: 12
+                        radius: 8
                         border.color: Kirigami.Theme.disabledTextColor
                         border.width: 1
                     }
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: Kirigami.Units.largeSpacing
-                        spacing: Kirigami.Units.largeSpacing
+                        anchors.margins: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -697,7 +722,7 @@ Kirigami.ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: Kirigami.Theme.alternateBackgroundColor
-                            radius: 10
+                            radius: 8
                             border.color: Kirigami.Theme.disabledTextColor
                             border.width: 1
                             clip: true
