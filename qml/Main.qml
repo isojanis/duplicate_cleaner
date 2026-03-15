@@ -126,38 +126,39 @@ Kirigami.ApplicationWindow {
                         }
                     }
 
-                    RowLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: Kirigami.Units.largeSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
-                        ColumnLayout {
+                        RowLayout {
                             Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
+                            spacing: Kirigami.Units.largeSpacing
 
                             Label {
                                 text: appBridge && appBridge.isScanning ? "Live scan status" : "Scan summary"
                                 font.pointSize: 16
                                 font.bold: true
+                                Layout.alignment: Qt.AlignTop
                             }
 
                             Label {
                                 Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
                                 wrapMode: Text.WordWrap
                                 text: appBridge ? appBridge.statusText : "Loading..."
                             }
+                        }
 
-                            Label {
-                                Layout.fillWidth: true
-                                visible: appBridge ? appBridge.isScanning : false
-                                wrapMode: Text.WrapAnywhere
-                                text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
-                                color: Kirigami.Theme.disabledTextColor
-                            }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: appBridge ? appBridge.isScanning : false
+                            wrapMode: Text.WrapAnywhere
+                            text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
+                            color: Kirigami.Theme.disabledTextColor
                         }
 
                         Flow {
                             Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignTop
                             spacing: Kirigami.Units.largeSpacing
 
                             Repeater {
