@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/duplicate_cleaner/__init__.py
+src/duplicate_cleaner/__main__.py
+src/duplicate_cleaner/app.py
+src/duplicate_cleaner/bridge.py
+src/duplicate_cleaner.egg-info/PKG-INFO
+src/duplicate_cleaner.egg-info/SOURCES.txt
+src/duplicate_cleaner.egg-info/dependency_links.txt
+src/duplicate_cleaner.egg-info/requires.txt
+src/duplicate_cleaner.egg-info/top_level.txt

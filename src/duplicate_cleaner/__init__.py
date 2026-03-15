@@ -1,0 +1,1 @@
+"""Duplicate Cleaner package."""
