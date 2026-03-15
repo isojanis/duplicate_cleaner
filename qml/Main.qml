@@ -50,8 +50,8 @@ Kirigami.ApplicationWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: Kirigami.Units.largeSpacing
-            spacing: Kirigami.Units.largeSpacing
+            anchors.margins: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing
 
             Frame {
                 Layout.fillWidth: true
@@ -168,7 +168,7 @@ Kirigami.ApplicationWindow {
                                     { label: "Duplicate groups", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.groupCount : 0) },
                                     { label: "Duplicate files", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.duplicateFiles : 0) },
                                     { label: "Hash progress", value: appBridge && appBridge.scanSummary ? String(appBridge.scanSummary.hashedFiles) + " / " + String(appBridge.scanSummary.hashCandidates) : "0 / 0" },
-                                                                                                            { label: "Wasted space", value: root.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
+                                    { label: "Wasted space", value: root.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
                                 ]
 
                                 delegate: Rectangle {
@@ -309,6 +309,7 @@ Kirigami.ApplicationWindow {
 
                                             delegate: Rectangle {
                                                 required property string modelData
+                                                property bool deleted: appBridge ? appBridge.deletedPaths.indexOf(modelData) !== -1 : false
 
                                                 Layout.fillWidth: true
                                                 color: appBridge && appBridge.previewData && appBridge.previewData.path === modelData
@@ -322,16 +323,59 @@ Kirigami.ApplicationWindow {
                                                     anchors.fill: parent
                                                     anchors.margins: Kirigami.Units.smallSpacing
                                                     wrapMode: Text.WrapAnywhere
-                                                    color: parent.color === "transparent"
-                                                        ? Kirigami.Theme.linkColor
-                                                        : Kirigami.Theme.highlightedTextColor
+                                                    font.italic: parent.deleted
+                                                    font.strikeout: parent.deleted
+                                                    color: parent.deleted
+                                                        ? "#b24a4a"
+                                                        : (parent.color === "transparent"
+                                                            ? Kirigami.Theme.linkColor
+                                                            : Kirigami.Theme.highlightedTextColor)
                                                     text: root.compactResultPath(modelData)
                                                 }
 
                                                 MouseArea {
                                                     anchors.fill: parent
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: appBridge.selectPreviewFile(modelData)
+                                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                    cursorShape: parent.deleted ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                                    onClicked: function(mouse) {
+                                                        if (mouse.button === Qt.LeftButton)
+                                                            appBridge.selectPreviewFile(modelData)
+                                                        if (mouse.button === Qt.RightButton && !parent.deleted)
+                                                            fileMenu.popup()
+                                                    }
+                                                }
+
+                                                Menu {
+                                                    id: fileMenu
+
+                                                    MenuItem {
+                                                        text: "Delete"
+                                                        onTriggered: deleteDialog.open()
+                                                    }
+
+                                                    MenuSeparator {}
+
+                                                    MenuItem {
+                                                        text: "Show in folder"
+                                                        onTriggered: appBridge.showInFolder(modelData)
+                                                    }
+                                                }
+
+                                                Dialog {
+                                                    id: deleteDialog
+                                                    title: "Delete file?"
+                                                    modal: true
+                                                    standardButtons: Dialog.Yes | Dialog.No
+
+                                                    onAccepted: appBridge.deleteFile(modelData)
+
+                                                    contentItem: Label {
+                                                        width: 320
+                                                        wrapMode: Text.WordWrap
+                                                        text: "Are you sure you want to delete this file?
+
+" + modelData
+                                                    }
                                                 }
                                             }
                                         }
@@ -381,6 +425,9 @@ Kirigami.ApplicationWindow {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             font.bold: true
+                            font.italic: appBridge && appBridge.previewData ? appBridge.previewData.isDeleted : false
+                            font.strikeout: appBridge && appBridge.previewData ? appBridge.previewData.isDeleted : false
+                            color: appBridge && appBridge.previewData && appBridge.previewData.isDeleted ? "#b24a4a" : Kirigami.Theme.textColor
                             text: appBridge && appBridge.previewData ? appBridge.previewData.name : "No file selected"
                         }
 

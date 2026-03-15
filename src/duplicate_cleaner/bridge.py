@@ -52,6 +52,7 @@ class ScanWorker(QObject):
 class AppBridge(QObject):
     selectedFolderChanged = Signal()
     recentFoldersChanged = Signal()
+    deletedPathsChanged = Signal()
     previewDataChanged = Signal()
     statusTextChanged = Signal()
     duplicateGroupsChanged = Signal()
@@ -62,6 +63,7 @@ class AppBridge(QObject):
         super().__init__(parent)
         self._settings = QSettings()
         self._recent_folders = self._load_recent_folders()
+        self._deleted_paths: list[str] = []
         self._selected_folder = self._recent_folders[0] if self._recent_folders else str(Path.home())
         self._status_text = "Choose a folder to begin."
         self._duplicate_groups: list[dict[str, object]] = []
@@ -83,6 +85,11 @@ class AppBridge(QObject):
         self._scan_thread: QThread | None = None
         self._scan_worker: ScanWorker | None = None
 
+    def _normalize_path(self, path: str) -> str:
+        if path.startswith("file://"):
+            path = path.removeprefix("file://")
+        return str(Path(path).expanduser())
+
     def _load_recent_folders(self) -> list[str]:
         value = self._settings.value(RECENT_FOLDERS_KEY, [])
         if isinstance(value, str):
@@ -95,7 +102,7 @@ class AppBridge(QObject):
         self._settings.setValue(RECENT_FOLDERS_KEY, self._recent_folders)
 
     def _record_recent_folder(self, folder: str) -> None:
-        normalized = str(Path(folder).expanduser())
+        normalized = self._normalize_path(folder)
         self._recent_folders = [path for path in self._recent_folders if path != normalized]
         self._recent_folders.insert(0, normalized)
         self._recent_folders = self._recent_folders[:MAX_RECENT_FOLDERS]
@@ -130,12 +137,27 @@ class AppBridge(QObject):
             "textContent": "Select a file from the duplicate results to preview it here.",
             "statusText": "",
             "isTruncated": False,
+            "isDeleted": False,
         }
 
     def _set_preview_data(self, data: dict[str, object]) -> None:
         self._preview_data = data
         self.previewDataChanged.emit()
 
+    def _sort_duplicate_groups(self) -> None:
+        def sort_key(group: dict[str, object]) -> tuple[bool, int, int]:
+            files = [str(path) for path in group.get("files", [])]
+            remaining = sum(1 for file_path in files if file_path not in self._deleted_paths)
+            demote = remaining <= 1
+            return (demote, -int(group.get("wastedBytes", 0)), -int(group.get("count", 0)))
+
+        self._duplicate_groups.sort(key=sort_key)
+
+    def _clear_deleted_paths(self) -> None:
+        if not self._deleted_paths:
+            return
+        self._deleted_paths = []
+        self.deletedPathsChanged.emit()
 
     def _hash_file_for_preview(self, file_path: Path) -> str:
         digest = sha256()
@@ -149,10 +171,7 @@ class AppBridge(QObject):
 
     @Slot(str)
     def setSelectedFolder(self, folder: str) -> None:
-        if folder.startswith("file://"):
-            folder = folder.removeprefix("file://")
-
-        normalized = str(Path(folder).expanduser())
+        normalized = self._normalize_path(folder)
         if normalized == self._selected_folder:
             return
 
@@ -160,6 +179,7 @@ class AppBridge(QObject):
         self.selectedFolderChanged.emit()
         self._duplicate_groups = []
         self.duplicateGroupsChanged.emit()
+        self._clear_deleted_paths()
         self._set_preview_data(self._build_empty_preview())
         self._reset_scan_summary(normalized, "Ready")
         self.setStatusText(f"Ready to scan: {normalized}")
@@ -170,6 +190,11 @@ class AppBridge(QObject):
         return self._recent_folders
 
     recentFolders = Property("QVariantList", get_recent_folders, notify=recentFoldersChanged)
+
+    def get_deleted_paths(self) -> list[str]:
+        return self._deleted_paths
+
+    deletedPaths = Property("QVariantList", get_deleted_paths, notify=deletedPathsChanged)
 
     def get_preview_data(self) -> dict[str, object]:
         return self._preview_data
@@ -213,12 +238,14 @@ class AppBridge(QObject):
         self._scan_thread = None
         self._set_is_scanning(False)
 
+    @Slot(str, result=bool)
+    def isDeletedPath(self, path: str) -> bool:
+        return self._normalize_path(path) in self._deleted_paths
+
     @Slot(str)
     def selectPreviewFile(self, path: str) -> None:
-        if path.startswith("file://"):
-            path = path.removeprefix("file://")
-
-        file_path = Path(path).expanduser()
+        normalized = self._normalize_path(path)
+        file_path = Path(normalized)
         if not file_path.exists() or not file_path.is_file():
             self._set_preview_data(
                 {
@@ -226,6 +253,7 @@ class AppBridge(QObject):
                     "path": str(file_path),
                     "name": file_path.name or str(file_path),
                     "statusText": "File is no longer available.",
+                    "isDeleted": normalized in self._deleted_paths,
                 }
             )
             return
@@ -247,6 +275,7 @@ class AppBridge(QObject):
             "textContent": "",
             "statusText": "Preview not available for this file type.",
             "isTruncated": False,
+            "isDeleted": normalized in self._deleted_paths,
         }
 
         try:
@@ -291,18 +320,57 @@ class AppBridge(QObject):
     @Slot()
     def openPreviewFolder(self) -> None:
         path = self._preview_data.get("path", "")
-        if not path:
-            return
+        if path:
+            self.showInFolder(path)
 
-        folder = Path(path).expanduser().parent
+    @Slot(str)
+    def showInFolder(self, path: str) -> None:
+        normalized = self._normalize_path(path)
+        folder = Path(normalized).parent
         if not folder.exists():
-            self.setStatusText(f"Preview folder is no longer available: {folder}")
+            self.setStatusText(f"Folder is no longer available: {folder}")
             return
 
         try:
             subprocess.Popen(["xdg-open", str(folder)])
         except OSError as exc:
             self.setStatusText(f"Could not open folder: {exc}")
+
+    @Slot(str)
+    def deleteFile(self, path: str) -> None:
+        normalized = self._normalize_path(path)
+        if normalized in self._deleted_paths:
+            return
+
+        file_path = Path(normalized)
+        if not file_path.exists():
+            self.setStatusText(f"File is already gone: {file_path}")
+            self._deleted_paths.append(normalized)
+            self.deletedPathsChanged.emit()
+            return
+
+        try:
+            file_path.unlink()
+        except OSError as exc:
+            self.setStatusText(f"Could not delete file: {exc}")
+            return
+
+        self._deleted_paths.append(normalized)
+        self.deletedPathsChanged.emit()
+        self._sort_duplicate_groups()
+        self.duplicateGroupsChanged.emit()
+        if self._preview_data.get("path") == normalized:
+            self._set_preview_data(
+                {
+                    **self._preview_data,
+                    "previewKind": "none",
+                    "previewUrl": "",
+                    "statusText": "File deleted.",
+                    "textContent": "This file was deleted from disk.",
+                    "isDeleted": True,
+                }
+            )
+        self.setStatusText(f"Deleted file: {file_path}")
 
     @Slot(dict)
     def _update_scan_progress(self, progress: dict[str, object]) -> None:
@@ -335,7 +403,7 @@ class AppBridge(QObject):
     @Slot(dict)
     def _complete_scan(self, results: dict[str, object]) -> None:
         self._duplicate_groups = results["groups"]
-        self._duplicate_groups.sort(key=lambda group: (group["wastedBytes"], group["count"]), reverse=True)
+        self._sort_duplicate_groups()
         self.duplicateGroupsChanged.emit()
         self._scan_summary = {
             "folder": results["folder"],
@@ -402,6 +470,7 @@ class AppBridge(QObject):
         self._record_recent_folder(str(folder))
         self._duplicate_groups = []
         self.duplicateGroupsChanged.emit()
+        self._clear_deleted_paths()
         self._set_preview_data(self._build_empty_preview())
         self._reset_scan_summary(str(folder), "Starting")
         self.setStatusText(f"Starting scan in {folder}...")
