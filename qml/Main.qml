@@ -25,6 +25,16 @@ Kirigami.ApplicationWindow {
         return value.toFixed(decimals) + " " + units[unitIndex]
     }
 
+    function formatSizeText(bytes) {
+        if (bytes % (1024 * 1024 * 1024) === 0)
+            return (bytes / (1024 * 1024 * 1024)) + " GB"
+        if (bytes % (1024 * 1024) === 0)
+            return (bytes / (1024 * 1024)) + " MB"
+        if (bytes % 1024 === 0 && bytes !== 0)
+            return (bytes / 1024) + " KB"
+        return bytes + " B"
+    }
+
     function compactResultPath(filePath) {
         if (!appBridge || !appBridge.selectedFolder)
             return filePath
@@ -45,8 +55,20 @@ Kirigami.ApplicationWindow {
     visible: true
     title: "Duplicate Cleaner"
     property bool scanSummaryExpanded: true
+    property string minFileSizeText: "1 B"
     property string maxFileSizeText: "1 GB"
     property string duplicateSearchLimitText: "1000"
+    property string onlySearchFileExtensionText: ""
+    property string newIgnoreFolderPattern: ""
+    property string newIgnoreFileExtension: ""
+    Component.onCompleted: {
+        if (!appBridge)
+            return
+        root.minFileSizeText = root.formatSizeText(appBridge.minFileSizeBytes)
+        root.maxFileSizeText = root.formatSizeText(appBridge.maxFileSizeBytes)
+        root.duplicateSearchLimitText = String(appBridge.duplicateSearchLimit)
+        root.onlySearchFileExtensionText = appBridge.onlySearchFileExtension
+    }
 
     pageStack.initialPage: Kirigami.Page {
         title: "Duplicate Cleaner"
@@ -135,20 +157,20 @@ Kirigami.ApplicationWindow {
                                 folderField.editText = appBridge.selectedFolder
                         }
 
+                        function onMinFileSizeBytesChanged() {
+                            root.minFileSizeText = root.formatSizeText(appBridge.minFileSizeBytes)
+                        }
+
                         function onMaxFileSizeBytesChanged() {
-                            const bytes = appBridge.maxFileSizeBytes
-                            if (bytes % (1024 * 1024 * 1024) === 0)
-                                root.maxFileSizeText = (bytes / (1024 * 1024 * 1024)) + " GB"
-                            else if (bytes % (1024 * 1024) === 0)
-                                root.maxFileSizeText = (bytes / (1024 * 1024)) + " MB"
-                            else if (bytes % 1024 === 0)
-                                root.maxFileSizeText = (bytes / 1024) + " KB"
-                            else
-                                root.maxFileSizeText = bytes + " B"
+                            root.maxFileSizeText = root.formatSizeText(appBridge.maxFileSizeBytes)
                         }
 
                         function onDuplicateSearchLimitChanged() {
                             root.duplicateSearchLimitText = String(appBridge.duplicateSearchLimit)
+                        }
+
+                        function onOnlySearchFileExtensionChanged() {
+                            root.onlySearchFileExtensionText = appBridge.onlySearchFileExtension
                         }
                     }
 
@@ -179,18 +201,40 @@ Kirigami.ApplicationWindow {
                                 onToggled: if (appBridge) appBridge.setIgnoreEmptyFiles(checked)
                             }
 
+                            CheckBox {
+                                text: "Include sub-folders"
+                                checked: appBridge ? appBridge.includeSubfolders : true
+                                onToggled: if (appBridge) appBridge.setIncludeSubfolders(checked)
+                            }
+
                             RowLayout {
                                 spacing: Kirigami.Units.smallSpacing
 
                                 CheckBox {
-                                    text: "Ignore large files over"
-                                    checked: appBridge ? appBridge.ignoreLargeFiles : true
-                                    onToggled: if (appBridge) appBridge.setIgnoreLargeFiles(checked)
+                                    text: "Limit file size range"
+                                    checked: appBridge ? appBridge.limitFileSizeRange : true
+                                    onToggled: if (appBridge) appBridge.setLimitFileSizeRange(checked)
                                 }
+
+                                Label { text: "Min" }
 
                                 TextField {
                                     Layout.preferredWidth: 88
-                                    enabled: appBridge ? appBridge.ignoreLargeFiles : false
+                                    enabled: appBridge ? appBridge.limitFileSizeRange : false
+                                    hoverEnabled: true
+                                    text: root.minFileSizeText
+                                    placeholderText: "1 B"
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 300
+                                    ToolTip.text: "Accepts values with units like GB, MB, KB, or B. Defaults to 1 B. Example: 4 KB"
+                                    onEditingFinished: if (appBridge) appBridge.setMinFileSizeText(text)
+                                }
+
+                                Label { text: "Max" }
+
+                                TextField {
+                                    Layout.preferredWidth: 88
+                                    enabled: appBridge ? appBridge.limitFileSizeRange : false
                                     hoverEnabled: true
                                     text: root.maxFileSizeText
                                     placeholderText: "1 GB"
@@ -204,10 +248,15 @@ Kirigami.ApplicationWindow {
                             RowLayout {
                                 spacing: Kirigami.Units.smallSpacing
 
-                                Label { text: "Limit duplicate search" }
+                                CheckBox {
+                                    text: "Limit duplicate search"
+                                    checked: appBridge ? appBridge.useDuplicateSearchLimit : true
+                                    onToggled: if (appBridge) appBridge.setUseDuplicateSearchLimit(checked)
+                                }
 
                                 TextField {
                                     Layout.preferredWidth: 88
+                                    enabled: appBridge ? appBridge.useDuplicateSearchLimit : false
                                     hoverEnabled: true
                                     text: root.duplicateSearchLimitText
                                     placeholderText: "1000"
@@ -215,6 +264,60 @@ Kirigami.ApplicationWindow {
                                     ToolTip.delay: 300
                                     ToolTip.text: "Stops additional hashing after this many candidate files have been hashed. Default: 1000. Example: 250"
                                     onEditingFinished: if (appBridge) appBridge.setDuplicateSearchLimitText(text)
+                                }
+                            }
+
+                            RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                CheckBox {
+                                    text: appBridge ? "Ignore folders (" + appBridge.ignoreFolderPatterns.length + ")" : "Ignore folders"
+                                    checked: appBridge ? appBridge.useIgnoreFolderPatterns : false
+                                    onToggled: if (appBridge) appBridge.setUseIgnoreFolderPatterns(checked)
+                                }
+
+                                Button {
+                                    text: "Manage"
+                                    enabled: appBridge ? appBridge.useIgnoreFolderPatterns : false
+                                    onClicked: ignoreFoldersDialog.open()
+                                }
+                            }
+
+                            RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                CheckBox {
+                                    text: appBridge ? "Ignore extensions (" + appBridge.ignoreFileExtensions.length + ")" : "Ignore extensions"
+                                    checked: appBridge ? appBridge.useIgnoreFileExtensions : false
+                                    onToggled: if (appBridge) appBridge.setUseIgnoreFileExtensions(checked)
+                                }
+
+                                Button {
+                                    text: "Manage"
+                                    enabled: appBridge ? appBridge.useIgnoreFileExtensions : false
+                                    onClicked: ignoreExtensionsDialog.open()
+                                }
+                            }
+
+                            RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                CheckBox {
+                                    text: "Only search file extension"
+                                    checked: appBridge ? appBridge.useOnlySearchFileExtension : false
+                                    onToggled: if (appBridge) appBridge.setUseOnlySearchFileExtension(checked)
+                                }
+
+                                TextField {
+                                    Layout.preferredWidth: 100
+                                    enabled: appBridge ? appBridge.useOnlySearchFileExtension : false
+                                    hoverEnabled: true
+                                    text: root.onlySearchFileExtensionText
+                                    placeholderText: ".pdf"
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 300
+                                    ToolTip.text: "Restricts scanning to a single file extension. You can enter values like .pdf or pdf."
+                                    onEditingFinished: if (appBridge) appBridge.setOnlySearchFileExtensionText(text)
                                 }
                             }
                         }
@@ -334,6 +437,7 @@ Kirigami.ApplicationWindow {
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
 
                                 Label {
                                     text: "Duplicate groups"
@@ -342,6 +446,33 @@ Kirigami.ApplicationWindow {
                                 }
 
                                 Item { Layout.fillWidth: true }
+
+                                Label {
+                                    text: "Sort by"
+                                    color: Kirigami.Theme.disabledTextColor
+                                }
+
+                                ComboBox {
+                                    Layout.preferredWidth: 150
+                                    model: [
+                                        { text: "Size of files", value: "size" },
+                                        { text: "Number of matches", value: "count" }
+                                    ]
+                                    textRole: "text"
+                                    Component.onCompleted: currentIndex = appBridge && appBridge.sortField === "count" ? 1 : 0
+                                    onActivated: if (appBridge) appBridge.setSortField(model[index].value)
+                                }
+
+                                ComboBox {
+                                    Layout.preferredWidth: 130
+                                    model: [
+                                        { text: "Descending", value: "descending" },
+                                        { text: "Ascending", value: "ascending" }
+                                    ]
+                                    textRole: "text"
+                                    Component.onCompleted: currentIndex = appBridge && appBridge.sortDirection === "ascending" ? 1 : 0
+                                    onActivated: if (appBridge) appBridge.setSortDirection(model[index].value)
+                                }
 
                                 Label {
                                     text: appBridge && appBridge.scanSummary
@@ -645,6 +776,188 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.WordWrap
                 color: Kirigami.Theme.disabledTextColor
                 text: appBridge && appBridge.previewData ? appBridge.previewData.textContent : "Select a file to preview it here."
+            }
+        }
+    }
+
+
+    Dialog {
+        id: ignoreFoldersDialog
+        title: "Ignore folders by pattern"
+        modal: true
+        width: 560
+        height: Math.max(420, root.height - Kirigami.Units.gridUnit * 6)
+        x: Math.round((root.width - width) / 2)
+        y: Math.round((root.height - height) / 2)
+        standardButtons: Dialog.Close
+
+        onOpened: root.newIgnoreFolderPattern = ""
+
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Kirigami.Theme.disabledTextColor
+                text: "Folder paths matching any of these regular expressions will be skipped during scanning."
+            }
+
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                model: appBridge ? appBridge.ignoreFolderPatterns : []
+                spacing: Kirigami.Units.smallSpacing
+
+                delegate: Rectangle {
+                    required property string modelData
+                    width: ListView.view.width
+                    radius: 8
+                    color: Kirigami.Theme.alternateBackgroundColor
+                    border.color: Kirigami.Theme.disabledTextColor
+                    border.width: 1
+                    implicitHeight: patternRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+
+                    RowLayout {
+                        id: patternRow
+                        anchors.fill: parent
+                        anchors.margins: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WrapAnywhere
+                            text: modelData
+                        }
+
+                        Button {
+                            text: "Remove"
+                            onClicked: if (appBridge) appBridge.removeIgnoreFolderPattern(modelData)
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                TextField {
+                    id: ignoreFolderPatternField
+                    Layout.fillWidth: true
+                    text: root.newIgnoreFolderPattern
+                    placeholderText: "Example: /node_modules/|/.git/"
+                    onTextChanged: root.newIgnoreFolderPattern = text
+                    onAccepted: {
+                        if (appBridge) {
+                            appBridge.addIgnoreFolderPattern(text)
+                            root.newIgnoreFolderPattern = ""
+                            ignoreFolderPatternField.text = ""
+                        }
+                    }
+                }
+
+                Button {
+                    text: "Add"
+                    enabled: root.newIgnoreFolderPattern.trim().length > 0
+                    onClicked: {
+                        if (appBridge) {
+                            appBridge.addIgnoreFolderPattern(root.newIgnoreFolderPattern)
+                            root.newIgnoreFolderPattern = ""
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: ignoreExtensionsDialog
+        title: "Ignore file extensions"
+        modal: true
+        width: 520
+        height: Math.max(400, root.height - Kirigami.Units.gridUnit * 6)
+        x: Math.round((root.width - width) / 2)
+        y: Math.round((root.height - height) / 2)
+        standardButtons: Dialog.Close
+
+        onOpened: root.newIgnoreFileExtension = ""
+
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Kirigami.Theme.disabledTextColor
+                text: "Files with these extensions will be skipped during scanning. You can enter values like .tmp or tmp."
+            }
+
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                model: appBridge ? appBridge.ignoreFileExtensions : []
+                spacing: Kirigami.Units.smallSpacing
+
+                delegate: Rectangle {
+                    required property string modelData
+                    width: ListView.view.width
+                    radius: 8
+                    color: Kirigami.Theme.alternateBackgroundColor
+                    border.color: Kirigami.Theme.disabledTextColor
+                    border.width: 1
+                    implicitHeight: extensionRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+
+                    RowLayout {
+                        id: extensionRow
+                        anchors.fill: parent
+                        anchors.margins: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: modelData
+                        }
+
+                        Button {
+                            text: "Remove"
+                            onClicked: if (appBridge) appBridge.removeIgnoreFileExtension(modelData)
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                TextField {
+                    id: ignoreFileExtensionField
+                    Layout.fillWidth: true
+                    text: root.newIgnoreFileExtension
+                    placeholderText: "Example: .tmp"
+                    onTextChanged: root.newIgnoreFileExtension = text
+                    onAccepted: {
+                        if (appBridge) {
+                            appBridge.addIgnoreFileExtension(text)
+                            root.newIgnoreFileExtension = ""
+                            ignoreFileExtensionField.text = ""
+                        }
+                    }
+                }
+
+                Button {
+                    text: "Add"
+                    enabled: root.newIgnoreFileExtension.trim().length > 0
+                    onClicked: {
+                        if (appBridge) {
+                            appBridge.addIgnoreFileExtension(root.newIgnoreFileExtension)
+                            root.newIgnoreFileExtension = ""
+                        }
+                    }
+                }
             }
         }
     }

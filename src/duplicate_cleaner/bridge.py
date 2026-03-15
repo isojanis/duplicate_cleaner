@@ -2,17 +2,32 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
+import re
 import subprocess
 from threading import Event
 
 from PySide6.QtCore import QObject, Property, QSettings, QThread, Signal, Slot
 
+DEFAULT_MIN_FILE_SIZE_BYTES = 1
 DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024
 DEFAULT_DUPLICATE_SEARCH_LIMIT = 1_000
 
 from .scanner import scan_for_duplicates
 
 RECENT_FOLDERS_KEY = "recentFolders"
+IGNORE_EMPTY_FILES_KEY = "ignoreEmptyFiles"
+INCLUDE_SUBFOLDERS_KEY = "includeSubfolders"
+LIMIT_FILE_SIZE_RANGE_KEY = "limitFileSizeRange"
+MIN_FILE_SIZE_BYTES_KEY = "minFileSizeBytes"
+MAX_FILE_SIZE_BYTES_KEY = "maxFileSizeBytes"
+USE_DUPLICATE_SEARCH_LIMIT_KEY = "useDuplicateSearchLimit"
+DUPLICATE_SEARCH_LIMIT_KEY = "duplicateSearchLimit"
+USE_IGNORE_FOLDER_PATTERNS_KEY = "useIgnoreFolderPatterns"
+IGNORE_FOLDER_PATTERNS_KEY = "ignoreFolderPatterns"
+USE_IGNORE_FILE_EXTENSIONS_KEY = "useIgnoreFileExtensions"
+IGNORE_FILE_EXTENSIONS_KEY = "ignoreFileExtensions"
+USE_ONLY_SEARCH_FILE_EXTENSION_KEY = "useOnlySearchFileExtension"
+ONLY_SEARCH_FILE_EXTENSION_KEY = "onlySearchFileExtension"
 MAX_RECENT_FOLDERS = 10
 MAX_TEXT_PREVIEW_BYTES = 100_000
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"}
@@ -29,13 +44,22 @@ class ScanWorker(QObject):
     finished = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, folder: str, *, ignore_empty_files: bool, ignore_large_files: bool, max_file_size_bytes: int, duplicate_search_limit: int) -> None:
+    def __init__(self, folder: str, *, ignore_empty_files: bool, include_subfolders: bool, limit_file_size_range: bool, min_file_size_bytes: int, max_file_size_bytes: int, use_duplicate_search_limit: bool, duplicate_search_limit: int, use_ignore_folder_patterns: bool, ignore_folder_patterns: list[str], use_ignore_file_extensions: bool, ignore_file_extensions: list[str], use_only_search_file_extension: bool, only_search_file_extension: str) -> None:
         super().__init__()
         self._folder = Path(folder).expanduser()
         self._ignore_empty_files = ignore_empty_files
-        self._ignore_large_files = ignore_large_files
+        self._include_subfolders = include_subfolders
+        self._limit_file_size_range = limit_file_size_range
+        self._min_file_size_bytes = min_file_size_bytes
         self._max_file_size_bytes = max_file_size_bytes
+        self._use_duplicate_search_limit = use_duplicate_search_limit
         self._duplicate_search_limit = duplicate_search_limit
+        self._use_ignore_folder_patterns = use_ignore_folder_patterns
+        self._ignore_folder_patterns = ignore_folder_patterns
+        self._use_ignore_file_extensions = use_ignore_file_extensions
+        self._ignore_file_extensions = ignore_file_extensions
+        self._use_only_search_file_extension = use_only_search_file_extension
+        self._only_search_file_extension = only_search_file_extension
         self._cancel_requested = Event()
 
     @Slot()
@@ -46,9 +70,18 @@ class ScanWorker(QObject):
                 progress_callback=self.progress.emit,
                 should_cancel=self._cancel_requested.is_set,
                 ignore_empty_files=self._ignore_empty_files,
-                ignore_large_files=self._ignore_large_files,
+                include_subfolders=self._include_subfolders,
+                limit_file_size_range=self._limit_file_size_range,
+                min_file_size_bytes=self._min_file_size_bytes,
                 max_file_size_bytes=self._max_file_size_bytes,
+                use_duplicate_search_limit=self._use_duplicate_search_limit,
                 duplicate_search_limit=self._duplicate_search_limit,
+                use_ignore_folder_patterns=self._use_ignore_folder_patterns,
+                ignore_folder_patterns=self._ignore_folder_patterns,
+                use_ignore_file_extensions=self._use_ignore_file_extensions,
+                ignore_file_extensions=self._ignore_file_extensions,
+                use_only_search_file_extension=self._use_only_search_file_extension,
+                only_search_file_extension=self._only_search_file_extension,
             )
         except Exception as exc:  # pragma: no cover - defensive bridge layer
             self.failed.emit(str(exc))
@@ -67,11 +100,22 @@ class AppBridge(QObject):
     deletedPathsChanged = Signal()
     previewDataChanged = Signal()
     ignoreEmptyFilesChanged = Signal()
-    ignoreLargeFilesChanged = Signal()
+    includeSubfoldersChanged = Signal()
+    limitFileSizeRangeChanged = Signal()
+    minFileSizeBytesChanged = Signal()
     maxFileSizeBytesChanged = Signal()
+    useDuplicateSearchLimitChanged = Signal()
     duplicateSearchLimitChanged = Signal()
+    useIgnoreFolderPatternsChanged = Signal()
+    ignoreFolderPatternsChanged = Signal()
+    useIgnoreFileExtensionsChanged = Signal()
+    ignoreFileExtensionsChanged = Signal()
+    useOnlySearchFileExtensionChanged = Signal()
+    onlySearchFileExtensionChanged = Signal()
     statusTextChanged = Signal()
     duplicateGroupsChanged = Signal()
+    sortFieldChanged = Signal()
+    sortDirectionChanged = Signal()
     scanSummaryChanged = Signal()
     isScanningChanged = Signal()
     isCancellingChanged = Signal()
@@ -85,10 +129,21 @@ class AppBridge(QObject):
         self._status_text = "Choose a folder to begin."
         self._duplicate_groups: list[dict[str, object]] = []
         self._preview_data = self._build_empty_preview()
-        self._ignore_empty_files = True
-        self._ignore_large_files = True
-        self._max_file_size_bytes = DEFAULT_MAX_FILE_SIZE_BYTES
-        self._duplicate_search_limit = DEFAULT_DUPLICATE_SEARCH_LIMIT
+        self._ignore_empty_files = self._load_bool_setting(IGNORE_EMPTY_FILES_KEY, True)
+        self._include_subfolders = self._load_bool_setting(INCLUDE_SUBFOLDERS_KEY, True)
+        self._limit_file_size_range = self._load_bool_setting(LIMIT_FILE_SIZE_RANGE_KEY, True)
+        self._min_file_size_bytes = self._load_int_setting(MIN_FILE_SIZE_BYTES_KEY, DEFAULT_MIN_FILE_SIZE_BYTES)
+        self._max_file_size_bytes = self._load_int_setting(MAX_FILE_SIZE_BYTES_KEY, DEFAULT_MAX_FILE_SIZE_BYTES)
+        self._use_duplicate_search_limit = self._load_bool_setting(USE_DUPLICATE_SEARCH_LIMIT_KEY, True)
+        self._duplicate_search_limit = self._load_int_setting(DUPLICATE_SEARCH_LIMIT_KEY, DEFAULT_DUPLICATE_SEARCH_LIMIT)
+        self._use_ignore_folder_patterns = self._load_bool_setting(USE_IGNORE_FOLDER_PATTERNS_KEY, False)
+        self._ignore_folder_patterns = self._load_list_setting(IGNORE_FOLDER_PATTERNS_KEY)
+        self._use_ignore_file_extensions = self._load_bool_setting(USE_IGNORE_FILE_EXTENSIONS_KEY, False)
+        self._ignore_file_extensions = self._load_list_setting(IGNORE_FILE_EXTENSIONS_KEY)
+        self._use_only_search_file_extension = self._load_bool_setting(USE_ONLY_SEARCH_FILE_EXTENSION_KEY, False)
+        self._only_search_file_extension = str(self._settings.value(ONLY_SEARCH_FILE_EXTENSION_KEY, "") or "")
+        self._sort_field = "size"
+        self._sort_direction = "descending"
         self._scan_summary: dict[str, object] = {
             "folder": self._selected_folder,
             "currentPath": self._selected_folder,
@@ -122,6 +177,67 @@ class AppBridge(QObject):
 
     def _save_recent_folders(self) -> None:
         self._settings.setValue(RECENT_FOLDERS_KEY, self._recent_folders)
+
+    def _load_bool_setting(self, key: str, default: bool) -> bool:
+        value = self._settings.value(key, default)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _load_int_setting(self, key: str, default: int) -> int:
+        value = self._settings.value(key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _load_list_setting(self, key: str) -> list[str]:
+        value = self._settings.value(key, [])
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item)]
+        return []
+
+    def _save_scan_preferences(self) -> None:
+        self._settings.setValue(IGNORE_EMPTY_FILES_KEY, self._ignore_empty_files)
+        self._settings.setValue(INCLUDE_SUBFOLDERS_KEY, self._include_subfolders)
+        self._settings.setValue(LIMIT_FILE_SIZE_RANGE_KEY, self._limit_file_size_range)
+        self._settings.setValue(MIN_FILE_SIZE_BYTES_KEY, self._min_file_size_bytes)
+        self._settings.setValue(MAX_FILE_SIZE_BYTES_KEY, self._max_file_size_bytes)
+        self._settings.setValue(USE_DUPLICATE_SEARCH_LIMIT_KEY, self._use_duplicate_search_limit)
+        self._settings.setValue(DUPLICATE_SEARCH_LIMIT_KEY, self._duplicate_search_limit)
+        self._settings.setValue(USE_IGNORE_FOLDER_PATTERNS_KEY, self._use_ignore_folder_patterns)
+        self._settings.setValue(IGNORE_FOLDER_PATTERNS_KEY, self._ignore_folder_patterns)
+        self._settings.setValue(USE_IGNORE_FILE_EXTENSIONS_KEY, self._use_ignore_file_extensions)
+        self._settings.setValue(IGNORE_FILE_EXTENSIONS_KEY, self._ignore_file_extensions)
+        self._settings.setValue(USE_ONLY_SEARCH_FILE_EXTENSION_KEY, self._use_only_search_file_extension)
+        self._settings.setValue(ONLY_SEARCH_FILE_EXTENSION_KEY, self._only_search_file_extension)
+
+    def _parse_size_text(self, value: str, *, default: int) -> int | None:
+        cleaned = value.strip().upper().replace(" ", "")
+        if not cleaned:
+            return default
+
+        multiplier = 1
+        if cleaned.endswith("GB"):
+            multiplier = 1024 * 1024 * 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("MB"):
+            multiplier = 1024 * 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("KB"):
+            multiplier = 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("B"):
+            cleaned = cleaned[:-1]
+
+        try:
+            numeric = float(cleaned)
+        except ValueError:
+            return None
+
+        return max(0, int(numeric * multiplier))
 
     def _record_recent_folder(self, folder: str) -> None:
         normalized = self._normalize_path(folder)
@@ -167,11 +283,23 @@ class AppBridge(QObject):
         self.previewDataChanged.emit()
 
     def _sort_duplicate_groups(self) -> None:
-        def sort_key(group: dict[str, object]) -> tuple[bool, int, int]:
+        reverse = self._sort_direction == "descending"
+
+        def metric(group: dict[str, object]) -> int:
+            if self._sort_field == "count":
+                return int(group.get("count", 0))
+            return int(group.get("sizeBytes", 0))
+
+        def sort_key(group: dict[str, object]) -> tuple[bool, int, int, int]:
             files = [str(path) for path in group.get("files", [])]
             remaining = sum(1 for file_path in files if file_path not in self._deleted_paths)
             demote = remaining <= 1
-            return (demote, -int(group.get("wastedBytes", 0)), -int(group.get("count", 0)))
+            primary = metric(group)
+            secondary = int(group.get("wastedBytes", 0))
+            tertiary = int(group.get("count", 0))
+            if reverse:
+                return (demote, -primary, -secondary, -tertiary)
+            return (demote, primary, secondary, tertiary)
 
         self._duplicate_groups.sort(key=sort_key)
 
@@ -213,6 +341,34 @@ class AppBridge(QObject):
 
     recentFolders = Property("QVariantList", get_recent_folders, notify=recentFoldersChanged)
 
+    def get_sort_field(self) -> str:
+        return self._sort_field
+
+    @Slot(str)
+    def setSortField(self, value: str) -> None:
+        if value not in {"size", "count"} or value == self._sort_field:
+            return
+        self._sort_field = value
+        self.sortFieldChanged.emit()
+        self._sort_duplicate_groups()
+        self.duplicateGroupsChanged.emit()
+
+    sortField = Property(str, get_sort_field, notify=sortFieldChanged)
+
+    def get_sort_direction(self) -> str:
+        return self._sort_direction
+
+    @Slot(str)
+    def setSortDirection(self, value: str) -> None:
+        if value not in {"ascending", "descending"} or value == self._sort_direction:
+            return
+        self._sort_direction = value
+        self.sortDirectionChanged.emit()
+        self._sort_duplicate_groups()
+        self.duplicateGroupsChanged.emit()
+
+    sortDirection = Property(str, get_sort_direction, notify=sortDirectionChanged)
+
     def get_ignore_empty_files(self) -> bool:
         return self._ignore_empty_files
 
@@ -221,57 +377,79 @@ class AppBridge(QObject):
         if self._ignore_empty_files == value:
             return
         self._ignore_empty_files = value
+        self._save_scan_preferences()
         self.ignoreEmptyFilesChanged.emit()
 
     ignoreEmptyFiles = Property(bool, get_ignore_empty_files, notify=ignoreEmptyFilesChanged)
 
-    def get_ignore_large_files(self) -> bool:
-        return self._ignore_large_files
+    def get_include_subfolders(self) -> bool:
+        return self._include_subfolders
 
     @Slot(bool)
-    def setIgnoreLargeFiles(self, value: bool) -> None:
-        if self._ignore_large_files == value:
+    def setIncludeSubfolders(self, value: bool) -> None:
+        if self._include_subfolders == value:
             return
-        self._ignore_large_files = value
-        self.ignoreLargeFilesChanged.emit()
+        self._include_subfolders = value
+        self._save_scan_preferences()
+        self.includeSubfoldersChanged.emit()
 
-    ignoreLargeFiles = Property(bool, get_ignore_large_files, notify=ignoreLargeFilesChanged)
+    includeSubfolders = Property(bool, get_include_subfolders, notify=includeSubfoldersChanged)
+
+    def get_limit_file_size_range(self) -> bool:
+        return self._limit_file_size_range
+
+    @Slot(bool)
+    def setLimitFileSizeRange(self, value: bool) -> None:
+        if self._limit_file_size_range == value:
+            return
+        self._limit_file_size_range = value
+        self._save_scan_preferences()
+        self.limitFileSizeRangeChanged.emit()
+
+    limitFileSizeRange = Property(bool, get_limit_file_size_range, notify=limitFileSizeRangeChanged)
+
+    def get_min_file_size_bytes(self) -> int:
+        return self._min_file_size_bytes
+
+    @Slot(str)
+    def setMinFileSizeText(self, value: str) -> None:
+        new_value = self._parse_size_text(value, default=DEFAULT_MIN_FILE_SIZE_BYTES)
+        if new_value is None or new_value == self._min_file_size_bytes:
+            return
+
+        self._min_file_size_bytes = new_value
+        self._save_scan_preferences()
+        self.minFileSizeBytesChanged.emit()
+
+    minFileSizeBytes = Property(int, get_min_file_size_bytes, notify=minFileSizeBytesChanged)
 
     def get_max_file_size_bytes(self) -> int:
         return self._max_file_size_bytes
 
     @Slot(str)
     def setMaxFileSizeText(self, value: str) -> None:
-        cleaned = value.strip().upper().replace(" ", "")
-        if not cleaned:
-            cleaned = "1GB"
-
-        multiplier = 1
-        if cleaned.endswith("GB"):
-            multiplier = 1024 * 1024 * 1024
-            cleaned = cleaned[:-2]
-        elif cleaned.endswith("MB"):
-            multiplier = 1024 * 1024
-            cleaned = cleaned[:-2]
-        elif cleaned.endswith("KB"):
-            multiplier = 1024
-            cleaned = cleaned[:-2]
-        elif cleaned.endswith("B"):
-            cleaned = cleaned[:-1]
-
-        try:
-            numeric = float(cleaned)
-        except ValueError:
-            return
-
-        new_value = max(0, int(numeric * multiplier))
-        if new_value == self._max_file_size_bytes:
+        new_value = self._parse_size_text(value, default=DEFAULT_MAX_FILE_SIZE_BYTES)
+        if new_value is None or new_value == self._max_file_size_bytes:
             return
 
         self._max_file_size_bytes = new_value
+        self._save_scan_preferences()
         self.maxFileSizeBytesChanged.emit()
 
     maxFileSizeBytes = Property(int, get_max_file_size_bytes, notify=maxFileSizeBytesChanged)
+
+    def get_use_duplicate_search_limit(self) -> bool:
+        return self._use_duplicate_search_limit
+
+    @Slot(bool)
+    def setUseDuplicateSearchLimit(self, value: bool) -> None:
+        if self._use_duplicate_search_limit == value:
+            return
+        self._use_duplicate_search_limit = value
+        self._save_scan_preferences()
+        self.useDuplicateSearchLimitChanged.emit()
+
+    useDuplicateSearchLimit = Property(bool, get_use_duplicate_search_limit, notify=useDuplicateSearchLimitChanged)
 
     def get_duplicate_search_limit(self) -> int:
         return self._duplicate_search_limit
@@ -285,9 +463,123 @@ class AppBridge(QObject):
         if new_value == self._duplicate_search_limit:
             return
         self._duplicate_search_limit = new_value
+        self._save_scan_preferences()
         self.duplicateSearchLimitChanged.emit()
 
     duplicateSearchLimit = Property(int, get_duplicate_search_limit, notify=duplicateSearchLimitChanged)
+
+    def get_use_ignore_folder_patterns(self) -> bool:
+        return self._use_ignore_folder_patterns
+
+    @Slot(bool)
+    def setUseIgnoreFolderPatterns(self, value: bool) -> None:
+        if self._use_ignore_folder_patterns == value:
+            return
+        self._use_ignore_folder_patterns = value
+        self._save_scan_preferences()
+        self.useIgnoreFolderPatternsChanged.emit()
+
+    useIgnoreFolderPatterns = Property(bool, get_use_ignore_folder_patterns, notify=useIgnoreFolderPatternsChanged)
+
+    def get_ignore_folder_patterns(self) -> list[str]:
+        return self._ignore_folder_patterns
+
+    ignoreFolderPatterns = Property("QVariantList", get_ignore_folder_patterns, notify=ignoreFolderPatternsChanged)
+
+    @Slot(str)
+    def addIgnoreFolderPattern(self, value: str) -> None:
+        pattern = value.strip()
+        if not pattern:
+            return
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            self.setStatusText(f"Invalid folder regex: {exc}")
+            return
+        if pattern in self._ignore_folder_patterns:
+            return
+        self._ignore_folder_patterns = [*self._ignore_folder_patterns, pattern]
+        self._save_scan_preferences()
+        self.ignoreFolderPatternsChanged.emit()
+
+    @Slot(str)
+    def removeIgnoreFolderPattern(self, value: str) -> None:
+        if value not in self._ignore_folder_patterns:
+            return
+        self._ignore_folder_patterns = [item for item in self._ignore_folder_patterns if item != value]
+        self._save_scan_preferences()
+        self.ignoreFolderPatternsChanged.emit()
+
+    def get_use_ignore_file_extensions(self) -> bool:
+        return self._use_ignore_file_extensions
+
+    @Slot(bool)
+    def setUseIgnoreFileExtensions(self, value: bool) -> None:
+        if self._use_ignore_file_extensions == value:
+            return
+        self._use_ignore_file_extensions = value
+        self._save_scan_preferences()
+        self.useIgnoreFileExtensionsChanged.emit()
+
+    useIgnoreFileExtensions = Property(bool, get_use_ignore_file_extensions, notify=useIgnoreFileExtensionsChanged)
+
+    def get_ignore_file_extensions(self) -> list[str]:
+        return self._ignore_file_extensions
+
+    ignoreFileExtensions = Property("QVariantList", get_ignore_file_extensions, notify=ignoreFileExtensionsChanged)
+
+    @Slot(str)
+    def addIgnoreFileExtension(self, value: str) -> None:
+        extension = value.strip().lower()
+        if not extension:
+            return
+        if not extension.startswith("."):
+            extension = "." + extension
+        if extension in self._ignore_file_extensions:
+            return
+        self._ignore_file_extensions = [*self._ignore_file_extensions, extension]
+        self._save_scan_preferences()
+        self.ignoreFileExtensionsChanged.emit()
+
+    @Slot(str)
+    def removeIgnoreFileExtension(self, value: str) -> None:
+        extension = value.strip().lower()
+        if not extension.startswith(".") and extension:
+            extension = "." + extension
+        if extension not in self._ignore_file_extensions:
+            return
+        self._ignore_file_extensions = [item for item in self._ignore_file_extensions if item != extension]
+        self._save_scan_preferences()
+        self.ignoreFileExtensionsChanged.emit()
+
+    def get_use_only_search_file_extension(self) -> bool:
+        return self._use_only_search_file_extension
+
+    @Slot(bool)
+    def setUseOnlySearchFileExtension(self, value: bool) -> None:
+        if self._use_only_search_file_extension == value:
+            return
+        self._use_only_search_file_extension = value
+        self._save_scan_preferences()
+        self.useOnlySearchFileExtensionChanged.emit()
+
+    useOnlySearchFileExtension = Property(bool, get_use_only_search_file_extension, notify=useOnlySearchFileExtensionChanged)
+
+    def get_only_search_file_extension(self) -> str:
+        return self._only_search_file_extension
+
+    @Slot(str)
+    def setOnlySearchFileExtensionText(self, value: str) -> None:
+        extension = value.strip().lower()
+        if extension and not extension.startswith("."):
+            extension = "." + extension
+        if extension == self._only_search_file_extension:
+            return
+        self._only_search_file_extension = extension
+        self._save_scan_preferences()
+        self.onlySearchFileExtensionChanged.emit()
+
+    onlySearchFileExtension = Property(str, get_only_search_file_extension, notify=onlySearchFileExtensionChanged)
 
     def get_deleted_paths(self) -> list[str]:
         return self._deleted_paths
@@ -593,12 +885,23 @@ class AppBridge(QObject):
         self.setStatusText(f"Starting scan in {folder}...")
 
         self._scan_thread = QThread(self)
+        min_file_size_bytes = min(self._min_file_size_bytes, self._max_file_size_bytes)
+        max_file_size_bytes = max(self._min_file_size_bytes, self._max_file_size_bytes)
         self._scan_worker = ScanWorker(
             str(folder),
             ignore_empty_files=self._ignore_empty_files,
-            ignore_large_files=self._ignore_large_files,
-            max_file_size_bytes=self._max_file_size_bytes,
+            include_subfolders=self._include_subfolders,
+            limit_file_size_range=self._limit_file_size_range,
+            min_file_size_bytes=min_file_size_bytes,
+            max_file_size_bytes=max_file_size_bytes,
+            use_duplicate_search_limit=self._use_duplicate_search_limit,
             duplicate_search_limit=self._duplicate_search_limit,
+            use_ignore_folder_patterns=self._use_ignore_folder_patterns,
+            ignore_folder_patterns=self._ignore_folder_patterns,
+            use_ignore_file_extensions=self._use_ignore_file_extensions,
+            ignore_file_extensions=self._ignore_file_extensions,
+            use_only_search_file_extension=self._use_only_search_file_extension,
+            only_search_file_extension=self._only_search_file_extension,
         )
         self._scan_worker.moveToThread(self._scan_thread)
         self._scan_thread.started.connect(self._scan_worker.run)

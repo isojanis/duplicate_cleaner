@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections import defaultdict
 from hashlib import sha256
@@ -57,9 +58,18 @@ def scan_for_duplicates(
     progress_callback: ProgressCallback | None = None,
     should_cancel: CancelCallback | None = None,
     ignore_empty_files: bool = True,
-    ignore_large_files: bool = False,
+    include_subfolders: bool = True,
+    limit_file_size_range: bool = False,
+    min_file_size_bytes: int = 1,
     max_file_size_bytes: int = 1024 * 1024 * 1024,
+    use_duplicate_search_limit: bool = True,
     duplicate_search_limit: int = 10_000,
+    use_ignore_folder_patterns: bool = False,
+    ignore_folder_patterns: list[str] | None = None,
+    use_ignore_file_extensions: bool = False,
+    ignore_file_extensions: list[str] | None = None,
+    use_only_search_file_extension: bool = False,
+    only_search_file_extension: str = "",
 ) -> dict[str, object]:
     files_by_size: dict[int, list[Path]] = defaultdict(list)
     total_files = 0
@@ -72,6 +82,11 @@ def scan_for_duplicates(
     hashed_files = 0
     last_progress_at = 0.0
     search_limit_reached = False
+    compiled_ignore_folder_patterns = [
+        re.compile(pattern) for pattern in (ignore_folder_patterns or []) if pattern
+    ] if use_ignore_folder_patterns else []
+    ignored_extensions = {extension.lower() for extension in (ignore_file_extensions or []) if extension} if use_ignore_file_extensions else set()
+    required_extension = only_search_file_extension.lower() if use_only_search_file_extension and only_search_file_extension else ""
 
     def emit_progress(phase: str, *, force: bool = False) -> None:
         nonlocal last_progress_at
@@ -102,7 +117,19 @@ def scan_for_duplicates(
         skipped_files += 1
         emit_progress("Skipping unreadable entry...", force=True)
 
-    for root_path, _dirnames, filenames in os.walk(folder, onerror=handle_walk_error):
+    for root_path, dirnames, filenames in os.walk(folder, onerror=handle_walk_error):
+        current_root = Path(root_path)
+        if include_subfolders:
+            filtered_dirnames: list[str] = []
+            for dirname in dirnames:
+                directory_path = current_root / dirname
+                directory_text = str(directory_path)
+                if any(pattern.search(directory_text) for pattern in compiled_ignore_folder_patterns):
+                    continue
+                filtered_dirnames.append(dirname)
+            dirnames[:] = filtered_dirnames
+        else:
+            dirnames[:] = []
         if should_cancel is not None and should_cancel():
             return _cancelled_result(
                 folder,
@@ -118,7 +145,6 @@ def scan_for_duplicates(
         current_path = root_path
         emit_progress("Scanning folder...")
 
-        current_root = Path(root_path)
         for filename in filenames:
             if should_cancel is not None and should_cancel():
                 return _cancelled_result(
@@ -148,8 +174,16 @@ def scan_for_duplicates(
                 emit_progress("Ignoring empty file...")
                 continue
 
-            if ignore_large_files and size > max_file_size_bytes:
-                emit_progress("Ignoring file larger than configured limit...")
+            if required_extension and path.suffix.lower() != required_extension:
+                emit_progress("Ignoring file outside required extension filter...")
+                continue
+
+            if path.suffix.lower() in ignored_extensions:
+                emit_progress("Ignoring file with excluded extension...")
+                continue
+
+            if limit_file_size_range and (size < min_file_size_bytes or size > max_file_size_bytes):
+                emit_progress("Ignoring file outside configured size range...")
                 continue
 
             total_files += 1
@@ -166,7 +200,7 @@ def scan_for_duplicates(
 
         files_by_hash: dict[str, list[Path]] = defaultdict(list)
         for path in paths:
-            if hashed_files >= duplicate_search_limit:
+            if use_duplicate_search_limit and hashed_files >= duplicate_search_limit:
                 search_limit_reached = True
                 emit_progress("Reached duplicate search limit.", force=True)
                 break
