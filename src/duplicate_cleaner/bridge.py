@@ -114,6 +114,7 @@ class AppBridge(QObject):
     onlySearchFileExtensionChanged = Signal()
     statusTextChanged = Signal()
     duplicateGroupsChanged = Signal()
+    magicCleanupChanged = Signal()
     sortFieldChanged = Signal()
     sortDirectionChanged = Signal()
     scanSummaryChanged = Signal()
@@ -308,6 +309,63 @@ class AppBridge(QObject):
             return
         self._deleted_paths = []
         self.deletedPathsChanged.emit()
+        self.magicCleanupChanged.emit()
+
+    def _levenshtein_distance_with_limit(self, left: str, right: str, limit: int) -> int:
+        if left == right:
+            return 0
+        if abs(len(left) - len(right)) > limit:
+            return limit + 1
+        previous = list(range(len(right) + 1))
+        for i, left_char in enumerate(left, start=1):
+            current = [i]
+            row_min = current[0]
+            for j, right_char in enumerate(right, start=1):
+                cost = 0 if left_char == right_char else 1
+                current_value = min(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost,
+                )
+                current.append(current_value)
+                row_min = min(row_min, current_value)
+            if row_min > limit:
+                return limit + 1
+            previous = current
+        return previous[-1]
+
+    def _collect_magic_cleanup_candidates(self) -> list[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for group in self._duplicate_groups:
+            active_files: list[Path] = []
+            for file_value in group.get("files", []):
+                normalized = self._normalize_path(str(file_value))
+                if normalized in self._deleted_paths or normalized in seen:
+                    continue
+                path = Path(normalized)
+                if path.exists() and path.is_file():
+                    active_files.append(path)
+            folders: dict[Path, list[Path]] = {}
+            for file_path in active_files:
+                folders.setdefault(file_path.parent, []).append(file_path)
+            for folder_paths in folders.values():
+                if len(folder_paths) < 2:
+                    continue
+                ordered = sorted(
+                    folder_paths,
+                    key=lambda file_path: (file_path.stat().st_mtime, file_path.name.lower()),
+                )
+                retained = ordered[0]
+                retained_name = retained.stem.lower()
+                for candidate in ordered[1:]:
+                    distance = self._levenshtein_distance_with_limit(retained_name, candidate.stem.lower(), 3)
+                    if distance < 4:
+                        normalized_candidate = str(candidate)
+                        if normalized_candidate not in seen:
+                            seen.add(normalized_candidate)
+                            candidates.append(normalized_candidate)
+        return candidates
 
     def _hash_file_for_preview(self, file_path: Path) -> str:
         digest = sha256()
@@ -329,6 +387,7 @@ class AppBridge(QObject):
         self.selectedFolderChanged.emit()
         self._duplicate_groups = []
         self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
         self._clear_deleted_paths()
         self._set_preview_data(self._build_empty_preview())
         self._reset_scan_summary(normalized, "Ready")
@@ -352,6 +411,7 @@ class AppBridge(QObject):
         self.sortFieldChanged.emit()
         self._sort_duplicate_groups()
         self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
 
     sortField = Property(str, get_sort_field, notify=sortFieldChanged)
 
@@ -366,6 +426,7 @@ class AppBridge(QObject):
         self.sortDirectionChanged.emit()
         self._sort_duplicate_groups()
         self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
 
     sortDirection = Property(str, get_sort_direction, notify=sortDirectionChanged)
 
@@ -738,29 +799,21 @@ class AppBridge(QObject):
         except OSError as exc:
             self.setStatusText(f"Could not open folder: {exc}")
 
-    @Slot(str)
-    def deleteFile(self, path: str) -> None:
-        normalized = self._normalize_path(path)
+    def _delete_path(self, normalized: str) -> bool:
         if normalized in self._deleted_paths:
-            return
+            return False
 
         file_path = Path(normalized)
         if not file_path.exists():
-            self.setStatusText(f"File is already gone: {file_path}")
             self._deleted_paths.append(normalized)
-            self.deletedPathsChanged.emit()
-            return
+            return False
 
         try:
             file_path.unlink()
-        except OSError as exc:
-            self.setStatusText(f"Could not delete file: {exc}")
-            return
+        except OSError:
+            return False
 
         self._deleted_paths.append(normalized)
-        self.deletedPathsChanged.emit()
-        self._sort_duplicate_groups()
-        self.duplicateGroupsChanged.emit()
         if self._preview_data.get("path") == normalized:
             self._set_preview_data(
                 {
@@ -772,6 +825,53 @@ class AppBridge(QObject):
                     "isDeleted": True,
                 }
             )
+        return True
+
+    def get_magic_cleanup_candidate_count(self) -> int:
+        return len(self._collect_magic_cleanup_candidates())
+
+    magicCleanupCandidateCount = Property(int, get_magic_cleanup_candidate_count, notify=magicCleanupChanged)
+
+    @Slot()
+    def applyMagicCleanup(self) -> None:
+        candidates = self._collect_magic_cleanup_candidates()
+        if not candidates:
+            self.setStatusText("No smart cleanup candidates found.")
+            return
+
+        deleted_count = 0
+        for candidate in candidates:
+            if self._delete_path(candidate):
+                deleted_count += 1
+
+        if deleted_count:
+            self.deletedPathsChanged.emit()
+            self._sort_duplicate_groups()
+            self.duplicateGroupsChanged.emit()
+            self.magicCleanupChanged.emit()
+            self.setStatusText(f"Smart cleanup deleted {deleted_count} duplicate files.")
+        else:
+            self.setStatusText("Smart cleanup did not delete any files.")
+
+    @Slot(str)
+    def deleteFile(self, path: str) -> None:
+        normalized = self._normalize_path(path)
+        file_path = Path(normalized)
+        if normalized in self._deleted_paths:
+            return
+        if not file_path.exists():
+            self.setStatusText(f"File is already gone: {file_path}")
+            self._deleted_paths.append(normalized)
+            self.deletedPathsChanged.emit()
+            self.magicCleanupChanged.emit()
+            return
+        if not self._delete_path(normalized):
+            self.setStatusText(f"Could not delete file: {file_path}")
+            return
+        self.deletedPathsChanged.emit()
+        self._sort_duplicate_groups()
+        self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
         self.setStatusText(f"Deleted file: {file_path}")
 
     @Slot(dict)
@@ -807,6 +907,7 @@ class AppBridge(QObject):
         self._duplicate_groups = results["groups"]
         self._sort_duplicate_groups()
         self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
         self._scan_summary = {
             "folder": results["folder"],
             "currentPath": results["currentPath"],
