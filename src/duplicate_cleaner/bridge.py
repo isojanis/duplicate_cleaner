@@ -3,8 +3,12 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 import subprocess
+from threading import Event
 
 from PySide6.QtCore import QObject, Property, QSettings, QThread, Signal, Slot
+
+DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024
+DEFAULT_DUPLICATE_SEARCH_LIMIT = 1_000
 
 from .scanner import scan_for_duplicates
 
@@ -25,10 +29,14 @@ class ScanWorker(QObject):
     finished = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, folder: str) -> None:
+    def __init__(self, folder: str, *, ignore_empty_files: bool, ignore_large_files: bool, max_file_size_bytes: int, duplicate_search_limit: int) -> None:
         super().__init__()
         self._folder = Path(folder).expanduser()
-        self._cancel_requested = False
+        self._ignore_empty_files = ignore_empty_files
+        self._ignore_large_files = ignore_large_files
+        self._max_file_size_bytes = max_file_size_bytes
+        self._duplicate_search_limit = duplicate_search_limit
+        self._cancel_requested = Event()
 
     @Slot()
     def run(self) -> None:
@@ -36,7 +44,11 @@ class ScanWorker(QObject):
             results = scan_for_duplicates(
                 self._folder,
                 progress_callback=self.progress.emit,
-                should_cancel=lambda: self._cancel_requested,
+                should_cancel=self._cancel_requested.is_set,
+                ignore_empty_files=self._ignore_empty_files,
+                ignore_large_files=self._ignore_large_files,
+                max_file_size_bytes=self._max_file_size_bytes,
+                duplicate_search_limit=self._duplicate_search_limit,
             )
         except Exception as exc:  # pragma: no cover - defensive bridge layer
             self.failed.emit(str(exc))
@@ -46,7 +58,7 @@ class ScanWorker(QObject):
 
     @Slot()
     def cancel(self) -> None:
-        self._cancel_requested = True
+        self._cancel_requested.set()
 
 
 class AppBridge(QObject):
@@ -54,10 +66,15 @@ class AppBridge(QObject):
     recentFoldersChanged = Signal()
     deletedPathsChanged = Signal()
     previewDataChanged = Signal()
+    ignoreEmptyFilesChanged = Signal()
+    ignoreLargeFilesChanged = Signal()
+    maxFileSizeBytesChanged = Signal()
+    duplicateSearchLimitChanged = Signal()
     statusTextChanged = Signal()
     duplicateGroupsChanged = Signal()
     scanSummaryChanged = Signal()
     isScanningChanged = Signal()
+    isCancellingChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -68,6 +85,10 @@ class AppBridge(QObject):
         self._status_text = "Choose a folder to begin."
         self._duplicate_groups: list[dict[str, object]] = []
         self._preview_data = self._build_empty_preview()
+        self._ignore_empty_files = True
+        self._ignore_large_files = True
+        self._max_file_size_bytes = DEFAULT_MAX_FILE_SIZE_BYTES
+        self._duplicate_search_limit = DEFAULT_DUPLICATE_SEARCH_LIMIT
         self._scan_summary: dict[str, object] = {
             "folder": self._selected_folder,
             "currentPath": self._selected_folder,
@@ -82,6 +103,7 @@ class AppBridge(QObject):
             "wastedBytes": 0,
         }
         self._is_scanning = False
+        self._is_cancelling = False
         self._scan_thread: QThread | None = None
         self._scan_worker: ScanWorker | None = None
 
@@ -191,6 +213,82 @@ class AppBridge(QObject):
 
     recentFolders = Property("QVariantList", get_recent_folders, notify=recentFoldersChanged)
 
+    def get_ignore_empty_files(self) -> bool:
+        return self._ignore_empty_files
+
+    @Slot(bool)
+    def setIgnoreEmptyFiles(self, value: bool) -> None:
+        if self._ignore_empty_files == value:
+            return
+        self._ignore_empty_files = value
+        self.ignoreEmptyFilesChanged.emit()
+
+    ignoreEmptyFiles = Property(bool, get_ignore_empty_files, notify=ignoreEmptyFilesChanged)
+
+    def get_ignore_large_files(self) -> bool:
+        return self._ignore_large_files
+
+    @Slot(bool)
+    def setIgnoreLargeFiles(self, value: bool) -> None:
+        if self._ignore_large_files == value:
+            return
+        self._ignore_large_files = value
+        self.ignoreLargeFilesChanged.emit()
+
+    ignoreLargeFiles = Property(bool, get_ignore_large_files, notify=ignoreLargeFilesChanged)
+
+    def get_max_file_size_bytes(self) -> int:
+        return self._max_file_size_bytes
+
+    @Slot(str)
+    def setMaxFileSizeText(self, value: str) -> None:
+        cleaned = value.strip().upper().replace(" ", "")
+        if not cleaned:
+            cleaned = "1GB"
+
+        multiplier = 1
+        if cleaned.endswith("GB"):
+            multiplier = 1024 * 1024 * 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("MB"):
+            multiplier = 1024 * 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("KB"):
+            multiplier = 1024
+            cleaned = cleaned[:-2]
+        elif cleaned.endswith("B"):
+            cleaned = cleaned[:-1]
+
+        try:
+            numeric = float(cleaned)
+        except ValueError:
+            return
+
+        new_value = max(0, int(numeric * multiplier))
+        if new_value == self._max_file_size_bytes:
+            return
+
+        self._max_file_size_bytes = new_value
+        self.maxFileSizeBytesChanged.emit()
+
+    maxFileSizeBytes = Property(int, get_max_file_size_bytes, notify=maxFileSizeBytesChanged)
+
+    def get_duplicate_search_limit(self) -> int:
+        return self._duplicate_search_limit
+
+    @Slot(str)
+    def setDuplicateSearchLimitText(self, value: str) -> None:
+        try:
+            new_value = max(1, int(value.strip() or DEFAULT_DUPLICATE_SEARCH_LIMIT))
+        except ValueError:
+            return
+        if new_value == self._duplicate_search_limit:
+            return
+        self._duplicate_search_limit = new_value
+        self.duplicateSearchLimitChanged.emit()
+
+    duplicateSearchLimit = Property(int, get_duplicate_search_limit, notify=duplicateSearchLimitChanged)
+
     def get_deleted_paths(self) -> list[str]:
         return self._deleted_paths
 
@@ -233,9 +331,21 @@ class AppBridge(QObject):
         self._is_scanning = value
         self.isScanningChanged.emit()
 
+    def get_is_cancelling(self) -> bool:
+        return self._is_cancelling
+
+    isCancelling = Property(bool, get_is_cancelling, notify=isCancellingChanged)
+
+    def _set_is_cancelling(self, value: bool) -> None:
+        if self._is_cancelling == value:
+            return
+        self._is_cancelling = value
+        self.isCancellingChanged.emit()
+
     def _cleanup_scan(self) -> None:
         self._scan_worker = None
         self._scan_thread = None
+        self._set_is_cancelling(False)
         self._set_is_scanning(False)
 
     @Slot(str, result=bool)
@@ -427,12 +537,19 @@ class AppBridge(QObject):
                 f"skipped {results['skippedFiles']}."
             )
         elif results["groupCount"]:
-            self.setStatusText(
-                "Found "
-                f"{results['groupCount']} duplicate groups after scanning "
-                f"{results['totalFiles']} files in {results['totalFolders']} folders "
-                f"with {results['skippedFiles']} skipped."
-            )
+            if results.get("searchLimitReached"):
+                self.setStatusText(
+                    "Duplicate search limit reached. Found "
+                    f"{results['groupCount']} groups after scanning {results['totalFiles']} files "
+                    f"in {results['totalFolders']} folders with {results['skippedFiles']} skipped."
+                )
+            else:
+                self.setStatusText(
+                    "Found "
+                    f"{results['groupCount']} duplicate groups after scanning "
+                    f"{results['totalFiles']} files in {results['totalFolders']} folders "
+                    f"with {results['skippedFiles']} skipped."
+                )
         else:
             self.setStatusText(
                 f"No duplicates found in {results['totalFiles']} files across "
@@ -476,7 +593,13 @@ class AppBridge(QObject):
         self.setStatusText(f"Starting scan in {folder}...")
 
         self._scan_thread = QThread(self)
-        self._scan_worker = ScanWorker(str(folder))
+        self._scan_worker = ScanWorker(
+            str(folder),
+            ignore_empty_files=self._ignore_empty_files,
+            ignore_large_files=self._ignore_large_files,
+            max_file_size_bytes=self._max_file_size_bytes,
+            duplicate_search_limit=self._duplicate_search_limit,
+        )
         self._scan_worker.moveToThread(self._scan_thread)
         self._scan_thread.started.connect(self._scan_worker.run)
         self._scan_worker.progress.connect(self._update_scan_progress)
@@ -485,6 +608,7 @@ class AppBridge(QObject):
         self._scan_worker.finished.connect(self._scan_worker.deleteLater)
         self._scan_worker.failed.connect(self._scan_worker.deleteLater)
         self._scan_thread.finished.connect(self._scan_thread.deleteLater)
+        self._set_is_cancelling(False)
         self._set_is_scanning(True)
         self._scan_thread.start()
 
@@ -493,8 +617,9 @@ class AppBridge(QObject):
         if not self._is_scanning or self._scan_worker is None:
             return
 
+        self._set_is_cancelling(True)
         self.setStatusText(
-            f"Stopping scan after {self._scan_summary['totalFiles']} files and "
-            f"{self._scan_summary['totalFolders']} folders..."
+            f"Cancelling... {self._scan_summary['totalFiles']} files and "
+            f"{self._scan_summary['totalFolders']} folders scanned so far."
         )
         self._scan_worker.cancel()

@@ -44,6 +44,9 @@ Kirigami.ApplicationWindow {
     height: 800
     visible: true
     title: "Duplicate Cleaner"
+    property bool scanSummaryExpanded: true
+    property string maxFileSizeText: "1 GB"
+    property string duplicateSearchLimitText: "1000"
 
     pageStack.initialPage: Kirigami.Page {
         title: "Duplicate Cleaner"
@@ -55,7 +58,7 @@ Kirigami.ApplicationWindow {
 
             Frame {
                 Layout.fillWidth: true
-                Layout.minimumHeight: 200
+                Layout.minimumHeight: root.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? 170 : 86
                 padding: 0
                 background: Rectangle {
                     color: Kirigami.Theme.backgroundColor
@@ -66,12 +69,12 @@ Kirigami.ApplicationWindow {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: Kirigami.Units.largeSpacing
-                    spacing: Kirigami.Units.largeSpacing
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    spacing: Kirigami.Units.smallSpacing
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: Kirigami.Units.largeSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
                         Label {
                             text: "Scan folder"
@@ -106,9 +109,16 @@ Kirigami.ApplicationWindow {
                         }
 
                         Button {
-                            text: appBridge && appBridge.isScanning ? "Stop scan" : "Start scan"
+                            text: appBridge && appBridge.isCancelling ? "Cancelling..." : (appBridge && appBridge.isScanning ? "Stop scan" : "Start scan")
                             highlighted: true
+                            enabled: appBridge ? !appBridge.isCancelling : false
                             onClicked: appBridge.startScan()
+                        }
+
+                        ToolButton {
+                            text: root.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? "▴" : "▾"
+                            enabled: appBridge ? !appBridge.isScanning : true
+                            onClicked: root.scanSummaryExpanded = !root.scanSummaryExpanded
                         }
                     }
 
@@ -124,11 +134,90 @@ Kirigami.ApplicationWindow {
                             if (!folderField.activeFocus)
                                 folderField.editText = appBridge.selectedFolder
                         }
+
+                        function onMaxFileSizeBytesChanged() {
+                            const bytes = appBridge.maxFileSizeBytes
+                            if (bytes % (1024 * 1024 * 1024) === 0)
+                                root.maxFileSizeText = (bytes / (1024 * 1024 * 1024)) + " GB"
+                            else if (bytes % (1024 * 1024) === 0)
+                                root.maxFileSizeText = (bytes / (1024 * 1024)) + " MB"
+                            else if (bytes % 1024 === 0)
+                                root.maxFileSizeText = (bytes / 1024) + " KB"
+                            else
+                                root.maxFileSizeText = bytes + " B"
+                        }
+
+                        function onDuplicateSearchLimitChanged() {
+                            root.duplicateSearchLimitText = String(appBridge.duplicateSearchLimit)
+                        }
+                    }
+
+                    Connections {
+                        target: appBridge
+
+                        function onIsScanningChanged() {
+                            if (appBridge.isScanning) {
+                                root.scanSummaryExpanded = true
+                            } else {
+                                root.scanSummaryExpanded = false
+                            }
+                        }
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true
+                        visible: root.scanSummaryExpanded || (appBridge && appBridge.isScanning)
                         spacing: Kirigami.Units.smallSpacing
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.largeSpacing
+
+                            CheckBox {
+                                text: "Ignore empty files"
+                                checked: appBridge ? appBridge.ignoreEmptyFiles : true
+                                onToggled: if (appBridge) appBridge.setIgnoreEmptyFiles(checked)
+                            }
+
+                            RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                CheckBox {
+                                    text: "Ignore large files over"
+                                    checked: appBridge ? appBridge.ignoreLargeFiles : true
+                                    onToggled: if (appBridge) appBridge.setIgnoreLargeFiles(checked)
+                                }
+
+                                TextField {
+                                    Layout.preferredWidth: 88
+                                    enabled: appBridge ? appBridge.ignoreLargeFiles : false
+                                    hoverEnabled: true
+                                    text: root.maxFileSizeText
+                                    placeholderText: "1 GB"
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 300
+                                    ToolTip.text: "Accepts values with units like GB, MB, KB, or B. Defaults to 1 GB. Example: 750 MB"
+                                    onEditingFinished: if (appBridge) appBridge.setMaxFileSizeText(text)
+                                }
+                            }
+
+                            RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Label { text: "Limit duplicate search" }
+
+                                TextField {
+                                    Layout.preferredWidth: 88
+                                    hoverEnabled: true
+                                    text: root.duplicateSearchLimitText
+                                    placeholderText: "1000"
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 300
+                                    ToolTip.text: "Stops additional hashing after this many candidate files have been hashed. Default: 1000. Example: 250"
+                                    onEditingFinished: if (appBridge) appBridge.setDuplicateSearchLimitText(text)
+                                }
+                            }
+                        }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -151,7 +240,7 @@ Kirigami.ApplicationWindow {
 
                         Label {
                             Layout.fillWidth: true
-                            visible: appBridge ? appBridge.isScanning : false
+                            visible: root.scanSummaryExpanded && (appBridge ? appBridge.isScanning : false)
                             wrapMode: Text.WrapAnywhere
                             text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
                             color: Kirigami.Theme.disabledTextColor
@@ -159,6 +248,7 @@ Kirigami.ApplicationWindow {
 
                         Flow {
                             Layout.fillWidth: true
+                            visible: root.scanSummaryExpanded
                             spacing: Kirigami.Units.largeSpacing
 
                             Repeater {
