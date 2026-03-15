@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Duplicate Cleaner
+Comment=Find and delete duplicate files
+Exec=duplicate-cleaner
+Icon=duplicate-cleaner
+Terminal=false
+Categories=Utility;FileTools;Qt;KDE;
+Keywords=duplicates;files;cleanup;scanner;
+StartupNotify=true

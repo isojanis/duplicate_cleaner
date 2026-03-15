@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.gui-scripts]
+duplicate-cleaner = "duplicate_cleaner.app:main"
+
 [project.optional-dependencies]
 dev = [
   "debugpy>=1.8",

@@ -16,6 +16,23 @@ SYSTEM_QML_IMPORT_PATHS = (
     "/usr/local/lib64/qt6/qml",
     "/usr/local/lib/qt6/qml",
 )
+INSTALLED_QML_PATHS = (
+    Path("/usr/share/duplicate-cleaner/qml/Main.qml"),
+    Path("/usr/local/share/duplicate-cleaner/qml/Main.qml"),
+)
+
+
+def _resolve_main_qml() -> Path:
+    package_root = Path(__file__).resolve().parents[2]
+    repo_qml = package_root / "qml" / "Main.qml"
+    if repo_qml.exists():
+        return repo_qml
+
+    for installed_qml in INSTALLED_QML_PATHS:
+        if installed_qml.exists():
+            return installed_qml
+
+    return repo_qml
 
 
 def main() -> int:
@@ -24,7 +41,7 @@ def main() -> int:
     app.setOrganizationName("isojanis")
     app.setDesktopFileName("duplicate-cleaner")
 
-    qml_path = Path(__file__).resolve().parents[2] / "qml" / "Main.qml"
+    qml_path = _resolve_main_qml()
 
     engine = QQmlApplicationEngine()
 
