@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
 from .bridge import AppBridge
@@ -20,6 +20,27 @@ INSTALLED_QML_PATHS = (
     Path("/usr/share/duplicate-cleaner/qml/Main.qml"),
     Path("/usr/local/share/duplicate-cleaner/qml/Main.qml"),
 )
+INSTALLED_ICON_PATHS = (
+    Path("/usr/share/icons/hicolor/scalable/apps/duplicate-cleaner.svg"),
+    Path("/usr/local/share/icons/hicolor/scalable/apps/duplicate-cleaner.svg"),
+)
+
+
+def _resolve_app_icon() -> QIcon:
+    themed_icon = QIcon.fromTheme("duplicate-cleaner")
+    if not themed_icon.isNull():
+        return themed_icon
+
+    package_root = Path(__file__).resolve().parents[2]
+    repo_icon = package_root / "packaging" / "assets" / "duplicate-cleaner.svg"
+    if repo_icon.exists():
+        return QIcon(str(repo_icon))
+
+    for icon_path in INSTALLED_ICON_PATHS:
+        if icon_path.exists():
+            return QIcon(str(icon_path))
+
+    return QIcon()
 
 
 def _resolve_main_qml() -> Path:
@@ -40,6 +61,7 @@ def main() -> int:
     app.setApplicationName("Duplicate Cleaner")
     app.setOrganizationName("isojanis")
     app.setDesktopFileName("duplicate-cleaner")
+    app.setWindowIcon(_resolve_app_icon())
 
     qml_path = _resolve_main_qml()
 
