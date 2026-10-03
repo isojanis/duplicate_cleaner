@@ -4,17 +4,18 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 Frame {
+    id: resultsPane
     property var rootWindow
     property var magicCleanupDialog
 
     SplitView.fillWidth: true
-    SplitView.preferredWidth: 700
-    SplitView.minimumWidth: 380
+    SplitView.preferredWidth: 780
+    SplitView.minimumWidth: 500
     padding: 0
     background: Rectangle {
-        color: Kirigami.Theme.backgroundColor
-        radius: 8
-        border.color: Kirigami.Theme.disabledTextColor
+        color: rootWindow.palette.base
+        radius: 12
+        border.color: rootWindow.subtleBorder
         border.width: 1
     }
 
@@ -25,9 +26,9 @@ Frame {
         clip: true
 
         ColumnLayout {
-            x: Kirigami.Units.smallSpacing
-            y: Kirigami.Units.smallSpacing
-            width: Math.max(0, resultsPaneScroll.availableWidth - Kirigami.Units.smallSpacing * 2)
+            x: 20
+            y: 20
+            width: Math.max(0, resultsPaneScroll.availableWidth - 40)
             spacing: Kirigami.Units.smallSpacing
 
             RowLayout {
@@ -35,12 +36,12 @@ Frame {
                 spacing: Kirigami.Units.smallSpacing
 
                 Label {
-                    text: "Duplicate groups"
-                    font.pointSize: 16
+                    text: "Duplicates"
+                    font.pixelSize: 18
                     font.bold: true
                 }
 
-                Button {
+                ActionButton {
                     text: appBridge && appBridge.magicCleanupCandidateCount > 0
                         ? "Smart cleanup (" + appBridge.magicCleanupCandidateCount + ")"
                         : "Smart cleanup"
@@ -50,9 +51,22 @@ Frame {
 
                 Item { Layout.fillWidth: true }
 
+
+                Label {
+                    text: appBridge && appBridge.scanSummary
+                        ? String(appBridge.scanSummary.groupCount) + " groups"
+                        : "0 groups"
+                    color: rootWindow.mutedText
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                visible: appBridge && appBridge.duplicateGroups.length > 0
+                spacing: 8
                 Label {
                     text: "Sort by"
-                    color: Kirigami.Theme.disabledTextColor
+                    color: rootWindow.mutedText
                 }
 
                 ComboBox {
@@ -77,22 +91,39 @@ Frame {
                     onActivated: if (appBridge) appBridge.setSortDirection(model[index].value)
                 }
 
-                Label {
-                    text: appBridge && appBridge.scanSummary
-                        ? String(appBridge.scanSummary.groupCount) + " groups"
-                        : "0 groups"
-                    color: Kirigami.Theme.disabledTextColor
-                }
+                Item { Layout.fillWidth: true }
             }
-
-            Label {
+            Item {
                 Layout.fillWidth: true
                 visible: !appBridge || appBridge.duplicateGroups.length === 0
-                wrapMode: Text.WordWrap
-                color: Kirigami.Theme.disabledTextColor
-                text: appBridge && appBridge.isScanning
-                    ? "Scanning in progress. Full groups appear when the scan completes, and you can preview files by clicking them afterward."
-                    : "No duplicate groups yet. Pick a folder and run a scan."
+                implicitHeight: Math.max(150, resultsPane.height - 100)
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 40, 360)
+                    spacing: 14
+                    Kirigami.Icon {
+                        source: appBridge && appBridge.isScanning ? "edit-find" : "folder-open"
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 52
+                        Layout.preferredHeight: 52
+                        opacity: 0.5
+                        visible: resultsPane.height > 300
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: 19
+                        font.weight: Font.DemiBold
+                        text: appBridge && appBridge.isScanning ? "Looking for duplicates…" : (appBridge && appBridge.scanSummary.totalFiles > 0 ? "No duplicates found" : "A little space, reclaimed")
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        color: rootWindow.mutedText
+                        text: appBridge && appBridge.isScanning ? "Comparing file contents. Results appear when the scan finishes." : (appBridge && appBridge.scanSummary.totalFiles > 0 ? "No matching files were found with the current filters." : "Choose a folder and start a scan. Review matching files here before deciding what to remove.")
+                    }
+                }
             }
 
             Repeater {
@@ -102,17 +133,17 @@ Frame {
                     required property var modelData
 
                     Layout.fillWidth: true
-                    color: Kirigami.Theme.alternateBackgroundColor
-                    radius: 8
-                    border.color: Kirigami.Theme.disabledTextColor
+                    color: rootWindow.mutedSurface
+                    radius: 12
+                    border.color: rootWindow.subtleBorder
                     border.width: 1
-                    implicitHeight: duplicateCard.implicitHeight + Kirigami.Units.largeSpacing * 2
+                    implicitHeight: duplicateCard.implicitHeight + 32
 
                     ColumnLayout {
                         id: duplicateCard
                         anchors.fill: parent
-                        anchors.margins: Kirigami.Units.smallSpacing
-                        spacing: Kirigami.Units.smallSpacing
+                        anchors.margins: 16
+                        spacing: 10
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -125,7 +156,7 @@ Frame {
 
                             Label {
                                 text: rootWindow.formatBytes(modelData.sizeBytes) + " each"
-                                color: Kirigami.Theme.disabledTextColor
+                                color: rootWindow.mutedText
                             }
                         }
 
@@ -134,14 +165,13 @@ Frame {
 
                             delegate: Rectangle {
                                 required property string modelData
+                                property bool selected: appBridge && appBridge.previewData && appBridge.previewData.path === modelData
                                 property bool deleted: appBridge ? appBridge.deletedPaths.indexOf(modelData) !== -1 : false
 
                                 Layout.fillWidth: true
-                                color: appBridge && appBridge.previewData && appBridge.previewData.path === modelData
-                                    ? Kirigami.Theme.highlightColor
-                                    : "transparent"
+                                color: selected ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12) : (fileMouse.containsMouse ? rootWindow.mutedSurface : "transparent")
                                 radius: 4
-                                implicitHeight: fileLabel.implicitHeight + Kirigami.Units.smallSpacing * 2
+                                implicitHeight: Math.max(42, fileLabel.implicitHeight + 20)
 
                                 Label {
                                     id: fileLabel
@@ -152,13 +182,13 @@ Frame {
                                     font.strikeout: parent.deleted
                                     color: parent.deleted
                                         ? "#b24a4a"
-                                        : (parent.color === "transparent"
-                                            ? Kirigami.Theme.linkColor
-                                            : Kirigami.Theme.highlightedTextColor)
+                                        : (parent.selected ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor)
                                     text: rootWindow.compactResultPath(modelData)
                                 }
 
                                 MouseArea {
+                                    id: fileMouse
+                                    hoverEnabled: true
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     cursorShape: parent.deleted ? Qt.ArrowCursor : Qt.PointingHandCursor

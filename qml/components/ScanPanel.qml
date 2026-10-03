@@ -16,12 +16,12 @@ Frame {
     property string onlySearchFileExtensionText: ""
 
     Layout.fillWidth: true
-    Layout.minimumHeight: rootWindow.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? 156 : 76
+    implicitHeight: scanContent.implicitHeight + 40
     padding: 0
     background: Rectangle {
-        color: Kirigami.Theme.backgroundColor
-        radius: 8
-        border.color: Kirigami.Theme.disabledTextColor
+        color: rootWindow.palette.base
+        radius: 12
+        border.color: rootWindow.subtleBorder
         border.width: 1
     }
 
@@ -35,22 +35,25 @@ Frame {
     }
 
     ColumnLayout {
+        id: scanContent
         anchors.fill: parent
-        anchors.margins: Kirigami.Units.smallSpacing / 2
-        spacing: Kirigami.Units.smallSpacing / 2
+        anchors.margins: 20
+        spacing: 14
 
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
             Label {
-                text: "Scan folder"
-                font.pointSize: 16
+                text: "Folder"
+                font.pixelSize: 14
                 font.bold: true
             }
 
             ComboBox {
                 id: folderField
+                objectName: "folderField"
+                Layout.preferredHeight: 40
                 Layout.fillWidth: true
                 editable: true
                 enabled: appBridge ? !appBridge.isScanning : false
@@ -69,22 +72,39 @@ Frame {
                 }
             }
 
-            Button {
-                text: "Choose folder"
+            ActionButton {
+                text: "Browse…"
+                icon.name: "folder-open"
                 enabled: appBridge ? !appBridge.isScanning : false
                 onClicked: folderDialog.open()
             }
 
-            Button {
+            ActionButton {
                 text: appBridge && appBridge.isCancelling ? "Cancelling..." : (appBridge && appBridge.isScanning ? "Stop scan" : "Start scan")
+                objectName: "scanButton"
+                icon.name: appBridge && appBridge.isScanning ? "process-stop" : "edit-find"
+                Layout.preferredHeight: 40
                 highlighted: true
                 enabled: appBridge ? !appBridge.isCancelling : false
                 onClicked: appBridge.startScan()
             }
 
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Label {
+                Layout.fillWidth: true
+                text: appBridge ? appBridge.statusText : "Choose a folder to begin."
+                elide: Text.ElideRight
+                color: rootWindow.mutedText
+            }
             ToolButton {
-                text: rootWindow.scanSummaryExpanded || (appBridge && appBridge.isScanning) ? "▴" : "▾"
-                enabled: appBridge ? !appBridge.isScanning : true
+                objectName: "optionsButton"
+                text: rootWindow.scanSummaryExpanded ? "Hide filters" : "Scan filters"
+                icon.name: "configure"
+                checkable: true
+                checked: rootWindow.scanSummaryExpanded
                 onClicked: rootWindow.scanSummaryExpanded = !rootWindow.scanSummaryExpanded
             }
         }
@@ -118,19 +138,18 @@ Frame {
                 scanPanel.onlySearchFileExtensionText = appBridge.onlySearchFileExtension
             }
 
-            function onIsScanningChanged() {
-                rootWindow.scanSummaryExpanded = appBridge.isScanning
-            }
+
         }
 
         ColumnLayout {
             Layout.fillWidth: true
-            visible: rootWindow.scanSummaryExpanded || (appBridge && appBridge.isScanning)
+            visible: rootWindow.scanSummaryExpanded
             spacing: Kirigami.Units.smallSpacing
 
             GridLayout {
                 Layout.fillWidth: true
-                columns: 2
+                enabled: appBridge ? !appBridge.isScanning : false
+                columns: width > 1000 ? 3 : 2
                 columnSpacing: Kirigami.Units.largeSpacing
                 rowSpacing: Kirigami.Units.smallSpacing
 
@@ -232,7 +251,7 @@ Frame {
                         onToggled: if (appBridge) appBridge.setUseIgnoreFolderPatterns(checked)
                     }
 
-                    Button {
+                    ActionButton {
                         text: "Manage"
                         enabled: appBridge ? appBridge.useIgnoreFolderPatterns : false
                         onClicked: ignoreFoldersDialog.open()
@@ -251,7 +270,7 @@ Frame {
                         onToggled: if (appBridge) appBridge.setUseIgnoreFileExtensions(checked)
                     }
 
-                    Button {
+                    ActionButton {
                         text: "Manage"
                         enabled: appBridge ? appBridge.useIgnoreFileExtensions : false
                         onClicked: ignoreExtensionsDialog.open()
@@ -284,85 +303,56 @@ Frame {
                 }
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
+        }
 
-                Label {
-                    text: appBridge && appBridge.isScanning ? "Live scan status" : "Scan summary"
-                    font.pointSize: 16
-                    font.bold: true
-                    Layout.alignment: Qt.AlignTop
-                }
-
-                Label {
+        ProgressBar {
+            Layout.fillWidth: true
+            visible: appBridge && appBridge.isScanning
+            indeterminate: !appBridge || !appBridge.scanSummary.hashCandidates
+            from: 0
+            to: appBridge && appBridge.scanSummary ? Math.max(1, appBridge.scanSummary.hashCandidates) : 1
+            value: appBridge && appBridge.scanSummary ? appBridge.scanSummary.hashedFiles : 0
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: appBridge && appBridge.isScanning
+            text: appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : ""
+            elide: Text.ElideMiddle
+            font.pixelSize: 11
+            color: rootWindow.mutedText
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 20
+            Repeater {
+                model: [
+                    { label: "Files scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFiles : 0) },
+                    { label: "Duplicate groups", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.groupCount : 0) },
+                    { label: "Extra copies", value: String(appBridge && appBridge.scanSummary ? Math.max(0, appBridge.scanSummary.duplicateFiles - appBridge.scanSummary.groupCount) : 0) },
+                    { label: "Reclaimable space", value: rootWindow.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
+                ]
+                delegate: Rectangle {
+                    required property var modelData
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-                    wrapMode: Text.WordWrap
-                    text: appBridge ? appBridge.statusText : "Loading..."
-                }
-            }
-
-            Label {
-                Layout.fillWidth: true
-                visible: rootWindow.scanSummaryExpanded && (appBridge ? appBridge.isScanning : false)
-                wrapMode: Text.WrapAnywhere
-                text: "Current path: " + (appBridge && appBridge.scanSummary ? appBridge.scanSummary.currentPath : "")
-                color: Kirigami.Theme.disabledTextColor
-            }
-
-            GridLayout {
-                id: liveScanStatsGrid
-                Layout.fillWidth: true
-                visible: rootWindow.scanSummaryExpanded
-                columns: Math.max(1, Math.min(statRepeater.count, Math.floor((width + columnSpacing) / 170)))
-                columnSpacing: Kirigami.Units.smallSpacing
-                rowSpacing: Kirigami.Units.smallSpacing
-
-                Repeater {
-                    id: statRepeater
-                    model: [
-                        { label: "Files scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFiles : 0) },
-                        { label: "Folders scanned", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.totalFolders : 0) },
-                        { label: "Skipped unreadable", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles : 0) },
-                        { label: "Duplicate groups", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.groupCount : 0) },
-                        { label: "Duplicate files", value: String(appBridge && appBridge.scanSummary ? appBridge.scanSummary.duplicateFiles : 0) },
-                        { label: "Hash progress", value: appBridge && appBridge.scanSummary ? String(appBridge.scanSummary.hashedFiles) + " / " + String(appBridge.scanSummary.hashCandidates) : "0 / 0" },
-                        { label: "Wasted space", value: rootWindow.formatBytes(appBridge && appBridge.scanSummary ? appBridge.scanSummary.wastedBytes : 0) }
-                    ]
-
-                    delegate: Rectangle {
-                        required property var modelData
-
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: Math.max(140, (liveScanStatsGrid.width - liveScanStatsGrid.columnSpacing * Math.max(0, liveScanStatsGrid.columns - 1)) / liveScanStatsGrid.columns)
-                        implicitHeight: statsColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
-                        radius: 6
-                        color: Kirigami.Theme.alternateBackgroundColor
-                        border.color: Kirigami.Theme.disabledTextColor
-                        border.width: 1
-
-                        Column {
-                            id: statsColumn
-                            anchors.fill: parent
-                            anchors.margins: Kirigami.Units.smallSpacing
-                            spacing: 2
-
-                            Label {
-                                wrapMode: Text.WordWrap
-                                text: modelData.label
-                                color: Kirigami.Theme.disabledTextColor
-                            }
-
-                            Label {
-                                wrapMode: Text.WordWrap
-                                font.bold: true
-                                text: modelData.value
-                            }
-                        }
+                    implicitHeight: 74
+                    color: rootWindow.mutedSurface
+                    radius: 8
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 3
+                        Label { text: modelData.value; font.pixelSize: 22; font.weight: Font.DemiBold }
+                        Label { text: modelData.label; font.pixelSize: 12; color: rootWindow.mutedText }
                     }
                 }
             }
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: appBridge && appBridge.scanSummary && appBridge.scanSummary.skippedFiles > 0
+            text: appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles + " unreadable files skipped" : ""
+            color: rootWindow.mutedText
+            font.pixelSize: 11
         }
     }
 }

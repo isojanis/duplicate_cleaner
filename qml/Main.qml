@@ -5,7 +5,7 @@ import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import "components"
 
-Kirigami.ApplicationWindow {
+ApplicationWindow {
     id: root
 
     function formatBytes(bytes) {
@@ -50,64 +50,46 @@ Kirigami.ApplicationWindow {
         return ".../" + filePath.slice(normalizedFolder.length)
     }
 
-    width: 1600
-    height: 1100
+    width: 1280
+    height: 860
+    minimumWidth: 960
+    minimumHeight: 680
     visible: true
     title: "Duplicate Cleaner"
-    property bool scanSummaryExpanded: true
-    property string appIconSource: "../packaging/assets/duplicate-cleaner.svg"
+    color: Kirigami.Theme.backgroundColor
+    property bool scanSummaryExpanded: false
+    readonly property color mutedText: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.62)
+    readonly property color subtleBorder: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
+    readonly property color mutedSurface: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.035)
 
-    pageStack.initialPage: Kirigami.Page {
-        title: "Duplicate Cleaner"
-        titleDelegate: RowLayout {
-            spacing: Kirigami.Units.smallSpacing
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 24
+        spacing: 20
 
-            Image {
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                source: root.appIconSource
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-            }
-
-            Label {
-                text: "Duplicate Cleaner"
-                font.bold: true
-            }
+        ScanPanel {
+            rootWindow: root
+            folderDialog: folderDialog
+            ignoreFoldersDialog: ignoreFoldersDialog
+            ignoreExtensionsDialog: ignoreExtensionsDialog
         }
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing / 2
-            spacing: Kirigami.Units.smallSpacing / 2
-
-            ScanPanel {
-                rootWindow: root
-                folderDialog: folderDialog
-                ignoreFoldersDialog: ignoreFoldersDialog
-                ignoreExtensionsDialog: ignoreExtensionsDialog
-            }
-
-            SplitView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                orientation: Qt.Horizontal
-                handle: Rectangle {
-                    implicitWidth: 8
-                    color: SplitHandle.hovered ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
-                    opacity: SplitHandle.pressed || SplitHandle.hovered ? 0.5 : 0.22
-                    radius: 4
-                }
-
-                ResultsPane {
-                    rootWindow: root
-                    magicCleanupDialog: magicCleanupDialog
-                }
-
-                PreviewPane {
-                    rootWindow: root
+        SplitView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            orientation: Qt.Horizontal
+            handle: Item {
+                implicitWidth: 16
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 3
+                    height: 32
+                    radius: 2
+                    color: SplitHandle.hovered ? Kirigami.Theme.highlightColor : root.subtleBorder
                 }
             }
+            ResultsPane { rootWindow: root; magicCleanupDialog: magicCleanupDialog }
+            PreviewPane { rootWindow: root }
         }
     }
 

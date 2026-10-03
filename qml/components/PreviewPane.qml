@@ -6,36 +6,39 @@ import org.kde.kirigami as Kirigami
 
 Frame {
     property var rootWindow
+    readonly property bool hasSelection: !!(appBridge && appBridge.previewData && appBridge.previewData.path)
 
-    SplitView.preferredWidth: 560
-    SplitView.minimumWidth: 400
-    SplitView.maximumWidth: 840
+    SplitView.preferredWidth: 350
+    SplitView.minimumWidth: 300
+    SplitView.maximumWidth: 600
     padding: 0
     background: Rectangle {
-        color: Kirigami.Theme.backgroundColor
-        radius: 8
-        border.color: Kirigami.Theme.disabledTextColor
+        color: rootWindow.palette.base
+        radius: 12
+        border.color: rootWindow.subtleBorder
         border.width: 1
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Kirigami.Units.smallSpacing
-        spacing: Kirigami.Units.smallSpacing
+        anchors.margins: 20
+        spacing: 12
 
         RowLayout {
             Layout.fillWidth: true
 
             Label {
-                text: "File preview"
-                font.pointSize: 16
+                text: "Preview"
+                font.pixelSize: 18
                 font.bold: true
             }
 
             Item { Layout.fillWidth: true }
 
-            Button {
-                text: "Open Folder"
+            ActionButton {
+                text: "Show in folder"
+                icon.name: "folder-open"
+                visible: hasSelection
                 enabled: appBridge && appBridge.previewData && appBridge.previewData.path !== ""
                 onClicked: appBridge.openPreviewFolder()
             }
@@ -43,6 +46,7 @@ Frame {
 
         Label {
             Layout.fillWidth: true
+            visible: hasSelection
             wrapMode: Text.WordWrap
             font.bold: true
             font.italic: appBridge && appBridge.previewData ? appBridge.previewData.isDeleted : false
@@ -53,13 +57,15 @@ Frame {
 
         Label {
             Layout.fillWidth: true
+            visible: hasSelection
             wrapMode: Text.WrapAnywhere
-            color: Kirigami.Theme.disabledTextColor
+            color: rootWindow.mutedText
             text: appBridge && appBridge.previewData ? appBridge.previewData.path : ""
         }
 
         GridLayout {
             Layout.fillWidth: true
+            visible: hasSelection
             columns: 2
             columnSpacing: Kirigami.Units.largeSpacing
             rowSpacing: Kirigami.Units.smallSpacing
@@ -79,7 +85,8 @@ Frame {
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: Kirigami.Theme.disabledTextColor
+            color: rootWindow.mutedText
+            visible: hasSelection
             text: appBridge && appBridge.previewData ? appBridge.previewData.statusText : ""
         }
 
@@ -87,17 +94,18 @@ Frame {
             Layout.fillWidth: true
             visible: appBridge && appBridge.previewData ? appBridge.previewData.isTruncated : false
             wrapMode: Text.WordWrap
-            color: Kirigami.Theme.disabledTextColor
+            color: rootWindow.mutedText
             text: "Preview truncated for large text files."
         }
 
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Kirigami.Theme.alternateBackgroundColor
-            radius: 8
-            border.color: Kirigami.Theme.disabledTextColor
-            border.width: 1
+            Layout.minimumHeight: 120
+            color: rootWindow.mutedSurface
+            radius: 12
+            border.color: rootWindow.subtleBorder
+            border.width: 0
             clip: true
 
             Loader {
@@ -163,13 +171,32 @@ Frame {
         id: emptyPreview
 
         Item {
-            Label {
+            ColumnLayout {
                 anchors.centerIn: parent
-                width: Math.min(parent.width - 24, 260)
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                color: Kirigami.Theme.disabledTextColor
-                text: appBridge && appBridge.previewData ? appBridge.previewData.textContent : "Select a file to preview it here."
+                width: Math.min(parent.width - 32, 260)
+                spacing: 12
+                Kirigami.Icon {
+                    source: "document-preview"
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 40
+                    opacity: 0.4
+                    visible: parent.parent.height > 180
+                }
+                Label {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    text: hasSelection ? "Preview unavailable" : "Take a closer look"
+                }
+                Label {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: rootWindow.mutedText
+                    text: hasSelection ? appBridge.previewData.textContent : "Select a file in the results to inspect its contents and details."
+                }
             }
         }
     }
