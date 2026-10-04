@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import org.kde.kirigami as Kirigami
 import "components"
 
 ApplicationWindow {
@@ -36,10 +35,11 @@ ApplicationWindow {
     }
 
     function compactResultPath(filePath) {
+        filePath = filePath.replace(/\\/g, "/")
         if (!appBridge || !appBridge.selectedFolder)
             return filePath
 
-        const scanFolder = appBridge.selectedFolder
+        const scanFolder = appBridge.selectedFolder.replace(/\\/g, "/")
         if (scanFolder === "/")
             return filePath
 
@@ -56,22 +56,52 @@ ApplicationWindow {
     minimumHeight: 680
     visible: true
     title: "Duplicate Cleaner"
-    color: Kirigami.Theme.backgroundColor
+    color: root.palette.window
     property bool scanSummaryExpanded: false
-    readonly property color mutedText: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.62)
-    readonly property color subtleBorder: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.10)
-    readonly property color mutedSurface: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.035)
+    property bool closeWhenStopped: false
+    onClosing: function(event) {
+        if (appBridge.isScanning || appBridge.isCleaning) {
+            event.accepted = false
+            closeWhenStopped = true
+            appBridge.stopScan()
+            appBridge.stopCleanup()
+        }
+    }
+    Connections {
+        target: appBridge
+        function onIsScanningChanged() {
+            if (root.closeWhenStopped && !appBridge.isScanning && !appBridge.isCleaning)
+                root.close()
+        }
+        function onIsCleaningChanged() {
+            if (root.closeWhenStopped && !appBridge.isScanning && !appBridge.isCleaning)
+                root.close()
+        }
+    }
+    Shortcut { sequence: "Ctrl+O"; enabled: !appBridge.isScanning && !appBridge.isCleaning; onActivated: folderDialog.open() }
+    Shortcut { sequence: "Escape"; enabled: appBridge.isScanning || appBridge.isCleaning; onActivated: { appBridge.stopScan(); appBridge.stopCleanup() } }
+    readonly property color mutedText: Qt.rgba(root.palette.text.r, root.palette.text.g, root.palette.text.b, 0.62)
+    readonly property color subtleBorder: Qt.rgba(root.palette.text.r, root.palette.text.g, root.palette.text.b, 0.10)
+    readonly property color mutedSurface: Qt.rgba(root.palette.text.r, root.palette.text.g, root.palette.text.b, 0.035)
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
         spacing: 20
 
-        ScanPanel {
-            rootWindow: root
-            folderDialog: folderDialog
-            ignoreFoldersDialog: ignoreFoldersDialog
-            ignoreExtensionsDialog: ignoreExtensionsDialog
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(scanPanel.implicitHeight, root.height * 0.55)
+            clip: true
+            contentWidth: availableWidth
+            ScanPanel {
+                id: scanPanel
+                width: parent.width
+                rootWindow: root
+                folderDialog: folderDialog
+                ignoreFoldersDialog: ignoreFoldersDialog
+                ignoreExtensionsDialog: ignoreExtensionsDialog
+            }
         }
 
         SplitView {
@@ -85,7 +115,7 @@ ApplicationWindow {
                     width: 3
                     height: 32
                     radius: 2
-                    color: SplitHandle.hovered ? Kirigami.Theme.highlightColor : root.subtleBorder
+                    color: SplitHandle.hovered ? root.palette.highlight : root.subtleBorder
                 }
             }
             ResultsPane { rootWindow: root; magicCleanupDialog: magicCleanupDialog }
@@ -110,7 +140,7 @@ ApplicationWindow {
 
     FolderDialog {
         id: folderDialog
-        currentFolder: appBridge ? "file://" + appBridge.selectedFolder : "file:///"
+        currentFolder: appBridge ? appBridge.fileUrl(appBridge.selectedFolder) : "file:///"
         onAccepted: appBridge.setSelectedFolder(selectedFolder.toString())
     }
 }

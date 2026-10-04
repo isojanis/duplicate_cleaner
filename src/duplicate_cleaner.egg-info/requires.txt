@@ -1,1 +1,13 @@
-PySide6>=6.7
+
+[:sys_platform == "win32"]
+PySide6<7,>=6.8
+
+[dev]
+debugpy>=1.8
+build>=1.2
+
+[portable]
+PySide6<7,>=6.8
+
+[windows-build]
+PyInstaller<7,>=6.11

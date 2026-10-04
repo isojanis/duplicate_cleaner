@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Pdf
-import org.kde.kirigami as Kirigami
 
 Frame {
     property var rootWindow
@@ -19,9 +18,15 @@ Frame {
         border.width: 1
     }
 
-    ColumnLayout {
+    ScrollView {
+        id: previewScroll
         anchors.fill: parent
         anchors.margins: 20
+        clip: true
+        contentWidth: availableWidth
+
+    ColumnLayout {
+        width: previewScroll.availableWidth
         spacing: 12
 
         RowLayout {
@@ -51,7 +56,7 @@ Frame {
             font.bold: true
             font.italic: appBridge && appBridge.previewData ? appBridge.previewData.isDeleted : false
             font.strikeout: appBridge && appBridge.previewData ? appBridge.previewData.isDeleted : false
-            color: appBridge && appBridge.previewData && appBridge.previewData.isDeleted ? "#b24a4a" : Kirigami.Theme.textColor
+            color: appBridge && appBridge.previewData && appBridge.previewData.isDeleted ? "#b24a4a" : rootWindow.palette.text
             text: appBridge && appBridge.previewData ? appBridge.previewData.name : "No file selected"
         }
 
@@ -67,8 +72,8 @@ Frame {
             Layout.fillWidth: true
             visible: hasSelection
             columns: 2
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.smallSpacing
+            columnSpacing: 12
+            rowSpacing: 6
 
             Label { text: "Type" }
             Label { text: appBridge && appBridge.previewData ? (appBridge.previewData.suffix || "unknown") : "" }
@@ -100,8 +105,7 @@ Frame {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: 120
+            Layout.preferredHeight: Math.max(180, previewScroll.availableHeight - 250)
             color: rootWindow.mutedSurface
             radius: 12
             border.color: rootWindow.subtleBorder
@@ -110,7 +114,7 @@ Frame {
 
             Loader {
                 anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
+                anchors.margins: 6
                 active: appBridge && appBridge.previewData
                 sourceComponent: {
                     if (!appBridge || !appBridge.previewData)
@@ -125,6 +129,7 @@ Frame {
                 }
             }
         }
+    }
     }
 
     Component {
@@ -175,8 +180,9 @@ Frame {
                 anchors.centerIn: parent
                 width: Math.min(parent.width - 32, 260)
                 spacing: 12
-                Kirigami.Icon {
-                    source: "document-preview"
+                Label {
+                    text: "▤"
+                    font.pixelSize: 36
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 40
                     Layout.preferredHeight: 40

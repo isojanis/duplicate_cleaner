@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
 
 Frame {
     id: resultsPane
     property var rootWindow
     property var magicCleanupDialog
+    readonly property string scanPhase: appBridge ? appBridge.scanSummary.phase : "Idle"
 
     SplitView.fillWidth: true
     SplitView.preferredWidth: 780
@@ -29,11 +29,11 @@ Frame {
             x: 20
             y: 20
             width: Math.max(0, resultsPaneScroll.availableWidth - 40)
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 6
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
+                spacing: 6
 
                 Label {
                     text: "Duplicates"
@@ -45,7 +45,7 @@ Frame {
                     text: appBridge && appBridge.magicCleanupCandidateCount > 0
                         ? "Smart cleanup (" + appBridge.magicCleanupCandidateCount + ")"
                         : "Smart cleanup"
-                    enabled: appBridge ? appBridge.magicCleanupCandidateCount > 0 : false
+                    enabled: appBridge ? appBridge.magicCleanupCandidateCount > 0 && !appBridge.isCleaning : false
                     onClicked: magicCleanupDialog.open()
                 }
 
@@ -101,8 +101,9 @@ Frame {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 40, 360)
                     spacing: 14
-                    Kirigami.Icon {
-                        source: appBridge && appBridge.isScanning ? "edit-find" : "folder-open"
+                    Label {
+                        text: "≡"
+                        font.pixelSize: 44
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: 52
                         Layout.preferredHeight: 52
@@ -114,14 +115,22 @@ Frame {
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: 19
                         font.weight: Font.DemiBold
-                        text: appBridge && appBridge.isScanning ? "Looking for duplicates…" : (appBridge && appBridge.scanSummary.totalFiles > 0 ? "No duplicates found" : "A little space, reclaimed")
+                        text: appBridge && appBridge.isScanning ? "Looking for duplicates…"
+                            : resultsPane.scanPhase === "Limited" ? "Search limit reached"
+                            : resultsPane.scanPhase === "Stopped" ? "Scan stopped"
+                            : resultsPane.scanPhase === "Failed" ? "Scan failed"
+                            : resultsPane.scanPhase === "Complete" ? "No duplicates found"
+                            : "A little space, reclaimed"
                     }
                     Label {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         color: rootWindow.mutedText
-                        text: appBridge && appBridge.isScanning ? "Comparing file contents. Results appear when the scan finishes." : (appBridge && appBridge.scanSummary.totalFiles > 0 ? "No matching files were found with the current filters." : "Choose a folder and start a scan. Review matching files here before deciding what to remove.")
+                        text: appBridge && appBridge.isScanning ? "Comparing file contents. Results appear when the scan finishes."
+                            : ["Limited", "Stopped", "Failed"].indexOf(resultsPane.scanPhase) !== -1 ? appBridge.statusText
+                            : resultsPane.scanPhase === "Complete" ? "No duplicates were found with the current filters."
+                            : "Choose a folder and start a scan. Review matching files here before deciding what to remove."
                     }
                 }
             }
@@ -164,25 +173,35 @@ Frame {
                             model: modelData.files
 
                             delegate: Rectangle {
+                                id: fileRow
+                                enabled: !appBridge.isCleaning
                                 required property string modelData
                                 property bool selected: appBridge && appBridge.previewData && appBridge.previewData.path === modelData
                                 property bool deleted: appBridge ? appBridge.deletedPaths.indexOf(modelData) !== -1 : false
 
                                 Layout.fillWidth: true
-                                color: selected ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12) : (fileMouse.containsMouse ? rootWindow.mutedSurface : "transparent")
+                                color: selected ? Qt.rgba(rootWindow.palette.highlight.r, rootWindow.palette.highlight.g, rootWindow.palette.highlight.b, 0.12) : (fileMouse.containsMouse ? rootWindow.mutedSurface : "transparent")
                                 radius: 4
                                 implicitHeight: Math.max(42, fileLabel.implicitHeight + 20)
+                                activeFocusOnTab: !deleted
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: modelData
+                                Keys.onReturnPressed: appBridge.selectPreviewFile(modelData)
+                                Keys.onSpacePressed: appBridge.selectPreviewFile(modelData)
+                                Keys.onDeletePressed: { if (!deleted) deleteDialog.open() }
+                                border.width: activeFocus ? 2 : 0
+                                border.color: rootWindow.palette.highlight
 
                                 Label {
                                     id: fileLabel
                                     anchors.fill: parent
-                                    anchors.margins: Kirigami.Units.smallSpacing
+                                    anchors.margins: 6
                                     wrapMode: Text.WrapAnywhere
                                     font.italic: parent.deleted
                                     font.strikeout: parent.deleted
                                     color: parent.deleted
                                         ? "#b24a4a"
-                                        : (parent.selected ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor)
+                                        : (parent.selected ? rootWindow.palette.link : rootWindow.palette.text)
                                     text: rootWindow.compactResultPath(modelData)
                                 }
 
@@ -193,6 +212,7 @@ Frame {
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     cursorShape: parent.deleted ? Qt.ArrowCursor : Qt.PointingHandCursor
                                     onClicked: function(mouse) {
+                                        fileRow.forceActiveFocus()
                                         if (mouse.button === Qt.LeftButton)
                                             appBridge.selectPreviewFile(modelData)
                                         if (mouse.button === Qt.RightButton && !parent.deleted)
@@ -204,7 +224,7 @@ Frame {
                                     id: fileMenu
 
                                     MenuItem {
-                                        text: "Delete"
+                                        text: "Move to Trash / Recycle Bin"
                                         onTriggered: deleteDialog.open()
                                     }
 
@@ -218,15 +238,18 @@ Frame {
 
                                 Dialog {
                                     id: deleteDialog
-                                    title: "Delete file?"
+                                    title: "Move duplicate to Trash / Recycle Bin?"
+                                    implicitWidth: 480
+                                    width: Math.min(480, rootWindow.width - 48)
+                                    parent: Overlay.overlay
+                                    anchors.centerIn: parent
                                     modal: true
                                     standardButtons: Dialog.Yes | Dialog.No
                                     onAccepted: appBridge.deleteFile(modelData)
 
                                     contentItem: Label {
-                                        width: 320
                                         wrapMode: Text.WordWrap
-                                        text: "Are you sure you want to delete this file?\n\n" + modelData
+                                        text: "A matching copy must still exist. You can restore this file from your system's Trash / Recycle Bin.\n\n" + modelData
                                     }
                                 }
                             }

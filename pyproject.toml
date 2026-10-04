@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "duplicate-cleaner"
 version = "0.1.0"
-description = "KDE-friendly duplicate file cleaner built with PySide6 and Kirigami."
+description = "Linux and Windows duplicate file cleaner built with PySide6 and Qt Quick."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["PySide6>=6.8,<7; sys_platform == 'win32'"]
 
 [project.gui-scripts]
 duplicate-cleaner = "duplicate_cleaner.app:main"
@@ -16,7 +16,10 @@ duplicate-cleaner = "duplicate_cleaner.app:main"
 [project.optional-dependencies]
 dev = [
   "debugpy>=1.8",
+  "build>=1.2",
 ]
+portable = ["PySide6>=6.8,<7"]
+windows-build = ["PyInstaller>=6.11,<7"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

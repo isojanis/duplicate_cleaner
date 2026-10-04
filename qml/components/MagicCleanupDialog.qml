@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
 
 Dialog {
     property var rootWindow
@@ -16,21 +15,21 @@ Dialog {
     onAccepted: if (appBridge) appBridge.applyMagicCleanup()
 
     contentItem: ColumnLayout {
-        spacing: Kirigami.Units.smallSpacing
+        spacing: 6
 
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             font.bold: true
-            text: "This will delete near-identical file-name hash duplicates that are in the same folder, keeping the oldest file in each match set."
+            text: "Move identical-content files with similar names in the same folder to Trash / Recycle Bin, keeping the file with the oldest modification time. Changed files and last copies are skipped."
         }
 
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: Kirigami.Theme.disabledTextColor
+            color: rootWindow.palette.placeholderText
             text: appBridge && appBridge.magicCleanupCandidateCount > 0
-                ? "You are about to delete " + appBridge.magicCleanupCandidateCount + " files. This cannot be undone from inside the app."
+                ? "Up to " + appBridge.magicCleanupCandidateCount + " files will be moved. Restore them through your system's Trash / Recycle Bin."
                 : "No eligible files were found for smart cleanup."
         }
     }

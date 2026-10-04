@@ -8,6 +8,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Callable
 
+from .safety import fingerprint
+
 ProgressCallback = Callable[[dict[str, object]], None]
 CancelCallback = Callable[[], bool]
 
@@ -58,7 +60,7 @@ def _cancelled_result(
 
 def _matching_groups_for_size(size: int, files_by_hash: dict[str, list[Path]]) -> list[dict[str, object]]:
     duplicate_groups: list[dict[str, object]] = []
-    for matching_paths in files_by_hash.values():
+    for digest, matching_paths in files_by_hash.items():
         if len(matching_paths) < 2:
             continue
 
@@ -69,6 +71,7 @@ def _matching_groups_for_size(size: int, files_by_hash: dict[str, list[Path]]) -
                 "sizeBytes": size,
                 "wastedBytes": size * (len(sorted_paths) - 1),
                 "files": [str(path) for path in sorted_paths],
+                "hash": digest,
             }
         )
 
@@ -94,7 +97,12 @@ def scan_for_duplicates(
     use_only_search_file_extension: bool = False,
     only_search_file_extension: str = "",
 ) -> dict[str, object]:
+    folder = folder.expanduser().absolute()
+    if not folder.is_dir():
+        raise ValueError(f"Not a directory: {folder}")
     files_by_size: dict[int, list[Path]] = defaultdict(list)
+    snapshots: dict[str, tuple] = {}
+    seen_inodes: set[tuple[int, int]] = set()
     total_files = 0
     total_folders = 0
     skipped_files = 0
@@ -146,7 +154,9 @@ def scan_for_duplicates(
             filtered_dirnames: list[str] = []
             for dirname in dirnames:
                 directory_path = current_root / dirname
-                directory_text = str(directory_path)
+                if directory_path.is_symlink() or getattr(directory_path, "is_junction", lambda: False)():
+                    continue
+                directory_text = directory_path.as_posix() + "/"
                 if any(pattern.search(directory_text) for pattern in compiled_ignore_folder_patterns):
                     continue
                 filtered_dirnames.append(dirname)
@@ -182,7 +192,8 @@ def scan_for_duplicates(
             current_path = str(path)
 
             try:
-                size = path.stat().st_size
+                identity = fingerprint(path)
+                size = identity[2]
             except OSError:
                 skipped_files += 1
                 emit_progress("Skipping unreadable file...", force=True)
@@ -190,6 +201,12 @@ def scan_for_duplicates(
 
             if not path.is_file():
                 continue
+
+            inode = identity[:2]
+            if inode[1] and inode in seen_inodes:
+                continue
+            seen_inodes.add(inode)
+            snapshots[str(path)] = identity
 
             if ignore_empty_files and size == 0:
                 emit_progress("Ignoring empty file...")
@@ -213,6 +230,11 @@ def scan_for_duplicates(
 
     hash_candidates = sum(len(paths) for paths in files_by_size.values() if len(paths) > 1)
     duplicate_groups: list[dict[str, object]] = []
+    def matching_groups(size: int, hashes: dict[str, list[Path]]) -> list[dict[str, object]]:
+        groups = _matching_groups_for_size(size, hashes)
+        for group in groups:
+            group["snapshots"] = {path: snapshots[path] for path in group["files"]}
+        return groups
     emit_progress("Preparing duplicate check...", force=True)
 
     for size, paths in files_by_size.items():
@@ -232,12 +254,16 @@ def scan_for_duplicates(
                     total_folders=total_folders,
                     skipped_files=skipped_files,
                     current_path=current_path,
-                    groups=duplicate_groups + _matching_groups_for_size(size, files_by_hash),
+                    groups=duplicate_groups + matching_groups(size, files_by_hash),
                 )
 
             current_path = str(path)
             try:
+                if fingerprint(path) != snapshots[str(path)]:
+                    raise OSError("File changed since discovery")
                 file_hash = _file_hash(path, should_cancel=should_cancel)
+                if fingerprint(path) != snapshots[str(path)]:
+                    raise OSError("File changed while hashing")
             except OSError:
                 skipped_files += 1
                 emit_progress("Skipping unreadable file during hashing...", force=True)
@@ -250,7 +276,7 @@ def scan_for_duplicates(
                     total_folders=total_folders,
                     skipped_files=skipped_files,
                     current_path=current_path,
-                    groups=duplicate_groups + _matching_groups_for_size(size, files_by_hash),
+                    groups=duplicate_groups + matching_groups(size, files_by_hash),
                 )
 
             files_by_hash[file_hash].append(path)
@@ -264,7 +290,7 @@ def scan_for_duplicates(
             hashed_files += 1
             emit_progress("Hashing duplicate candidates...")
 
-        duplicate_groups.extend(_matching_groups_for_size(size, files_by_hash))
+        duplicate_groups.extend(matching_groups(size, files_by_hash))
 
         if search_limit_reached:
             duplicate_groups.sort(

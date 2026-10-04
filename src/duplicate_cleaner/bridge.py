@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from hashlib import sha256
 from pathlib import Path
 import re
-import subprocess
+import math
 from threading import Event
 
-from PySide6.QtCore import QObject, Property, QSettings, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Property, QSettings, QThread, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 
 DEFAULT_MIN_FILE_SIZE_BYTES = 1
 DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024
 DEFAULT_DUPLICATE_SEARCH_LIMIT = 1_000
 
 from .scanner import scan_for_duplicates
+from .safety import fingerprint
+from .cleanup import CleanupWorker
 
 RECENT_FOLDERS_KEY = "recentFolders"
 IGNORE_EMPTY_FILES_KEY = "ignoreEmptyFiles"
@@ -120,6 +122,7 @@ class AppBridge(QObject):
     scanSummaryChanged = Signal()
     isScanningChanged = Signal()
     isCancellingChanged = Signal()
+    isCleaningChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -162,11 +165,45 @@ class AppBridge(QObject):
         self._is_cancelling = False
         self._scan_thread: QThread | None = None
         self._scan_worker: ScanWorker | None = None
+        self._cleanup_worker = None
+        self._cleanup_thread = None
 
     def _normalize_path(self, path: str) -> str:
-        if path.startswith("file://"):
-            path = path.removeprefix("file://")
-        return str(Path(path).expanduser())
+        url = QUrl(path)
+        if url.isLocalFile():
+            path = url.toLocalFile()
+        return str(Path(path).expanduser().absolute())
+
+    @Slot(str, result=QUrl)
+    def fileUrl(self, path: str) -> QUrl:
+        return QUrl.fromLocalFile(self._normalize_path(path))
+
+    @Slot()
+    def shutdown(self) -> None:
+        if self._scan_worker is not None:
+            self._scan_worker.cancel()
+        if self._scan_thread is not None:
+            self._scan_thread.quit()
+            self._scan_thread.wait()
+        self._cleanup_scan()
+        if self._cleanup_worker is not None:
+            self._cleanup_worker.cancel()
+        if self._cleanup_thread is not None:
+            self._cleanup_thread.quit()
+            self._cleanup_thread.wait()
+        self._cleanup_worker = None
+        self._cleanup_thread = None
+
+    def get_is_cleaning(self) -> bool:
+        return self._cleanup_thread is not None
+
+    isCleaning = Property(bool, get_is_cleaning, notify=isCleaningChanged)
+
+    @Slot()
+    def stopCleanup(self) -> None:
+        if self._cleanup_worker is not None:
+            self._cleanup_worker.cancel()
+            self.setStatusText("Cancelling cleanup…")
 
     def _load_recent_folders(self) -> list[str]:
         value = self._settings.value(RECENT_FOLDERS_KEY, [])
@@ -238,7 +275,9 @@ class AppBridge(QObject):
         except ValueError:
             return None
 
-        return max(0, int(numeric * multiplier))
+        if not math.isfinite(numeric) or numeric < 0 or numeric * multiplier > 2**53:
+            return None
+        return int(numeric * multiplier)
 
     def _record_recent_folder(self, folder: str) -> None:
         normalized = self._normalize_path(folder)
@@ -352,10 +391,10 @@ class AppBridge(QObject):
             for folder_paths in folders.values():
                 if len(folder_paths) < 2:
                     continue
-                ordered = sorted(
-                    folder_paths,
-                    key=lambda file_path: (file_path.stat().st_mtime, file_path.name.lower()),
-                )
+                try:
+                    ordered = sorted(folder_paths, key=lambda p: (p.stat().st_mtime_ns, p.name.lower()))
+                except OSError:
+                    continue
                 retained = ordered[0]
                 retained_name = retained.stem.lower()
                 for candidate in ordered[1:]:
@@ -367,18 +406,13 @@ class AppBridge(QObject):
                             candidates.append(normalized_candidate)
         return candidates
 
-    def _hash_file_for_preview(self, file_path: Path) -> str:
-        digest = sha256()
-        with file_path.open("rb") as handle:
-            while chunk := handle.read(1024 * 1024):
-                digest.update(chunk)
-        return digest.hexdigest()
-
     def get_selected_folder(self) -> str:
         return self._selected_folder
 
     @Slot(str)
     def setSelectedFolder(self, folder: str) -> None:
+        if self._is_scanning or self.get_is_cleaning():
+            return
         normalized = self._normalize_path(folder)
         if normalized == self._selected_folder:
             return
@@ -482,7 +516,7 @@ class AppBridge(QObject):
         self._save_scan_preferences()
         self.minFileSizeBytesChanged.emit()
 
-    minFileSizeBytes = Property(int, get_min_file_size_bytes, notify=minFileSizeBytesChanged)
+    minFileSizeBytes = Property("qlonglong", get_min_file_size_bytes, notify=minFileSizeBytesChanged)
 
     def get_max_file_size_bytes(self) -> int:
         return self._max_file_size_bytes
@@ -497,7 +531,7 @@ class AppBridge(QObject):
         self._save_scan_preferences()
         self.maxFileSizeBytesChanged.emit()
 
-    maxFileSizeBytes = Property(int, get_max_file_size_bytes, notify=maxFileSizeBytesChanged)
+    maxFileSizeBytes = Property("qlonglong", get_max_file_size_bytes, notify=maxFileSizeBytesChanged)
 
     def get_use_duplicate_search_limit(self) -> bool:
         return self._use_duplicate_search_limit
@@ -655,6 +689,7 @@ class AppBridge(QObject):
     def get_status_text(self) -> str:
         return self._status_text
 
+    @Slot(str)
     def setStatusText(self, text: str) -> None:
         if text == self._status_text:
             return
@@ -741,12 +776,16 @@ class AppBridge(QObject):
             "isDeleted": normalized in self._deleted_paths,
         }
 
-        try:
-            preview["fileHash"] = self._hash_file_for_preview(file_path)
-        except OSError:
-            preview["statusText"] = "Could not read this file to calculate a preview hash."
-            self._set_preview_data(preview)
-            return
+        # Reuse scan evidence instead of hashing gigabytes on the GUI thread.
+        preview["fileHash"] = "Not available; scan this file first."
+        for group in self._duplicate_groups:
+            if normalized in group.get("files", []):
+                try:
+                    unchanged = fingerprint(file_path) == tuple(group.get("snapshots", {}).get(normalized, ()))
+                except OSError:
+                    unchanged = False
+                preview["fileHash"] = group.get("hash", "") if unchanged else "File changed; scan again."
+                break
 
         if suffix in IMAGE_SUFFIXES:
             preview.update(
@@ -766,14 +805,15 @@ class AppBridge(QObject):
             )
         elif suffix in TEXT_SUFFIXES or size_bytes <= MAX_TEXT_PREVIEW_BYTES:
             try:
-                raw_text = file_path.read_text(encoding="utf-8", errors="replace")
+                with file_path.open("rb") as stream:
+                    raw_text = stream.read(MAX_TEXT_PREVIEW_BYTES + 1)
             except OSError:
                 preview["statusText"] = "Could not read this file for preview."
             else:
                 preview.update(
                     {
                         "previewKind": "text",
-                        "textContent": raw_text[:MAX_TEXT_PREVIEW_BYTES],
+                        "textContent": raw_text[:MAX_TEXT_PREVIEW_BYTES].decode("utf-8", errors="replace"),
                         "isTruncated": len(raw_text) > MAX_TEXT_PREVIEW_BYTES,
                         "statusText": "Text preview",
                     }
@@ -794,25 +834,11 @@ class AppBridge(QObject):
             self.setStatusText(f"Folder is no longer available: {folder}")
             return
 
-        try:
-            subprocess.Popen(["xdg-open", str(folder)])
-        except OSError as exc:
-            self.setStatusText(f"Could not open folder: {exc}")
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+            self.setStatusText(f"Could not open folder: {folder}")
 
-    def _delete_path(self, normalized: str) -> bool:
-        if normalized in self._deleted_paths:
-            return False
-
-        file_path = Path(normalized)
-        if not file_path.exists():
-            self._deleted_paths.append(normalized)
-            return False
-
-        try:
-            file_path.unlink()
-        except OSError:
-            return False
-
+    @Slot(str)
+    def _record_removed(self, normalized: str) -> None:
         self._deleted_paths.append(normalized)
         if self._preview_data.get("path") == normalized:
             self._set_preview_data(
@@ -820,12 +846,46 @@ class AppBridge(QObject):
                     **self._preview_data,
                     "previewKind": "none",
                     "previewUrl": "",
-                    "statusText": "File deleted.",
-                    "textContent": "This file was deleted from disk.",
+                    "statusText": "Moved to Trash / Recycle Bin.",
+                    "textContent": "Restore this file using your system's Trash / Recycle Bin.",
                     "isDeleted": True,
                 }
             )
-        return True
+        self.deletedPathsChanged.emit()
+        self._refresh_remaining_summary()
+
+    def _start_cleanup(self, paths: list[str]) -> None:
+        if self._is_scanning or self.get_is_cleaning():
+            self.setStatusText("Wait for the current operation to finish.")
+            return
+        self._cleanup_thread = QThread(self)
+        self._cleanup_worker = CleanupWorker(paths, list(self._duplicate_groups), self._deleted_paths)
+        self._cleanup_worker.moveToThread(self._cleanup_thread)
+        self._cleanup_thread.started.connect(self._cleanup_worker.run)
+        self._cleanup_worker.moved.connect(self._record_removed)
+        self._cleanup_worker.progress.connect(self.setStatusText)
+        self._cleanup_worker.finished.connect(self._finish_cleanup)
+        self._cleanup_worker.finished.connect(self._cleanup_worker.deleteLater)
+        self._cleanup_thread.finished.connect(self._cleanup_thread.deleteLater)
+        self.isCleaningChanged.emit()
+        self._cleanup_thread.start()
+
+    @Slot(dict)
+    def _finish_cleanup(self, result: dict) -> None:
+        if self._cleanup_thread is not None:
+            self._cleanup_thread.quit()
+            self._cleanup_thread.wait()
+        self._cleanup_worker = None
+        self._cleanup_thread = None
+        self._sort_duplicate_groups()
+        self.duplicateGroupsChanged.emit()
+        self.magicCleanupChanged.emit()
+        prefix = "Cleanup cancelled. " if result["cancelled"] else ""
+        message = f"{prefix}Moved {result['removed']} files to Trash / Recycle Bin."
+        if result["errors"]:
+            message += f" {len(result['errors'])} skipped. {result['errors'][0]}"
+        self.setStatusText(message)
+        self.isCleaningChanged.emit()
 
     def get_magic_cleanup_candidate_count(self) -> int:
         return len(self._collect_magic_cleanup_candidates())
@@ -839,40 +899,21 @@ class AppBridge(QObject):
             self.setStatusText("No smart cleanup candidates found.")
             return
 
-        deleted_count = 0
-        for candidate in candidates:
-            if self._delete_path(candidate):
-                deleted_count += 1
-
-        if deleted_count:
-            self.deletedPathsChanged.emit()
-            self._sort_duplicate_groups()
-            self.duplicateGroupsChanged.emit()
-            self.magicCleanupChanged.emit()
-            self.setStatusText(f"Smart cleanup deleted {deleted_count} duplicate files.")
-        else:
-            self.setStatusText("Smart cleanup did not delete any files.")
+        self._start_cleanup(candidates)
 
     @Slot(str)
     def deleteFile(self, path: str) -> None:
         normalized = self._normalize_path(path)
-        file_path = Path(normalized)
-        if normalized in self._deleted_paths:
-            return
-        if not file_path.exists():
-            self.setStatusText(f"File is already gone: {file_path}")
-            self._deleted_paths.append(normalized)
-            self.deletedPathsChanged.emit()
-            self.magicCleanupChanged.emit()
-            return
-        if not self._delete_path(normalized):
-            self.setStatusText(f"Could not delete file: {file_path}")
-            return
-        self.deletedPathsChanged.emit()
-        self._sort_duplicate_groups()
-        self.duplicateGroupsChanged.emit()
-        self.magicCleanupChanged.emit()
-        self.setStatusText(f"Deleted file: {file_path}")
+        self._start_cleanup([normalized])
+
+    def _refresh_remaining_summary(self) -> None:
+        counts = [(g, sum(p not in self._deleted_paths for p in g["files"])) for g in self._duplicate_groups]
+        active = [(g, n) for g, n in counts if n > 1]
+        self._scan_summary.update(
+            groupCount=len(active), duplicateFiles=sum(n for _, n in active),
+            wastedBytes=sum(int(g["sizeBytes"]) * (n - 1) for g, n in active),
+        )
+        self.scanSummaryChanged.emit()
 
     @Slot(dict)
     def _update_scan_progress(self, progress: dict[str, object]) -> None:
@@ -911,7 +952,7 @@ class AppBridge(QObject):
         self._scan_summary = {
             "folder": results["folder"],
             "currentPath": results["currentPath"],
-            "phase": "Stopped" if results["cancelled"] else "Complete",
+            "phase": "Stopped" if results["cancelled"] else ("Limited" if results.get("searchLimitReached") else "Complete"),
             "totalFiles": results["totalFiles"],
             "totalFolders": results["totalFolders"],
             "skippedFiles": results["skippedFiles"],
@@ -950,6 +991,8 @@ class AppBridge(QObject):
                     f"{results['totalFiles']} files in {results['totalFolders']} folders "
                     f"with {results['skippedFiles']} skipped."
                 )
+        elif results.get("searchLimitReached"):
+            self.setStatusText("Search limit reached. No duplicates found in the checked subset; increase the limit for a complete scan.")
         else:
             self.setStatusText(
                 f"No duplicates found in {results['totalFiles']} files across "
@@ -963,6 +1006,8 @@ class AppBridge(QObject):
 
     @Slot(str)
     def _fail_scan(self, message: str) -> None:
+        self._scan_summary["phase"] = "Failed"
+        self.scanSummaryChanged.emit()
         self.setStatusText(f"Scan failed: {message}")
         if self._scan_thread is not None:
             self._scan_thread.quit()
@@ -971,6 +1016,9 @@ class AppBridge(QObject):
 
     @Slot()
     def startScan(self) -> None:
+        if self.get_is_cleaning():
+            self.setStatusText("Wait for cleanup to finish.")
+            return
         if self._is_scanning:
             self.stopScan()
             return

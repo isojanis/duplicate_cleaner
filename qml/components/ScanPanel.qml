@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
 
 Frame {
     id: scanPanel
@@ -42,7 +41,7 @@ Frame {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 6
 
             Label {
                 text: "Folder"
@@ -56,7 +55,7 @@ Frame {
                 Layout.preferredHeight: 40
                 Layout.fillWidth: true
                 editable: true
-                enabled: appBridge ? !appBridge.isScanning : false
+                enabled: appBridge ? !appBridge.isScanning && !appBridge.isCleaning : false
                 model: appBridge ? appBridge.recentFolders : []
 
                 Component.onCompleted: {
@@ -75,7 +74,7 @@ Frame {
             ActionButton {
                 text: "Browse…"
                 icon.name: "folder-open"
-                enabled: appBridge ? !appBridge.isScanning : false
+                enabled: appBridge ? !appBridge.isScanning && !appBridge.isCleaning : false
                 onClicked: folderDialog.open()
             }
 
@@ -85,18 +84,27 @@ Frame {
                 icon.name: appBridge && appBridge.isScanning ? "process-stop" : "edit-find"
                 Layout.preferredHeight: 40
                 highlighted: true
-                enabled: appBridge ? !appBridge.isCancelling : false
-                onClicked: appBridge.startScan()
+                enabled: appBridge ? !appBridge.isCancelling && !appBridge.isCleaning : false
+                onClicked: {
+                    if (!appBridge.isScanning)
+                        appBridge.setSelectedFolder(folderField.editText)
+                    appBridge.startScan()
+                }
             }
 
         }
 
         RowLayout {
             Layout.fillWidth: true
+            ActionButton {
+                text: "Stop cleanup"
+                visible: appBridge && appBridge.isCleaning
+                onClicked: appBridge.stopCleanup()
+            }
             Label {
                 Layout.fillWidth: true
                 text: appBridge ? appBridge.statusText : "Choose a folder to begin."
-                elide: Text.ElideRight
+                wrapMode: Text.WordWrap
                 color: rootWindow.mutedText
             }
             ToolButton {
@@ -144,18 +152,18 @@ Frame {
         ColumnLayout {
             Layout.fillWidth: true
             visible: rootWindow.scanSummaryExpanded
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 6
 
             GridLayout {
                 Layout.fillWidth: true
                 enabled: appBridge ? !appBridge.isScanning : false
                 columns: width > 1000 ? 3 : 2
-                columnSpacing: Kirigami.Units.largeSpacing
-                rowSpacing: Kirigami.Units.smallSpacing
+                columnSpacing: 12
+                rowSpacing: 6
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: "Ignore empty files"
@@ -168,7 +176,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: "Include sub-folders"
@@ -181,7 +189,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: "Limit file size range"
@@ -220,7 +228,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: "Limit duplicate search"
@@ -243,7 +251,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: appBridge ? "Ignore folders (" + appBridge.ignoreFolderPatterns.length + ")" : "Ignore folders"
@@ -262,7 +270,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: appBridge ? "Ignore extensions (" + appBridge.ignoreFileExtensions.length + ")" : "Ignore extensions"
@@ -281,7 +289,7 @@ Frame {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                    spacing: 6
 
                     CheckBox {
                         text: "Only search file extension"
@@ -350,7 +358,7 @@ Frame {
         Label {
             Layout.fillWidth: true
             visible: appBridge && appBridge.scanSummary && appBridge.scanSummary.skippedFiles > 0
-            text: appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles + " unreadable files skipped" : ""
+            text: appBridge && appBridge.scanSummary ? appBridge.scanSummary.skippedFiles + " unavailable, changed, or non-regular entries skipped" : ""
             color: rootWindow.mutedText
             font.pixelSize: 11
         }

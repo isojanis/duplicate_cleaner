@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
 
 Dialog {
     id: dialog
@@ -11,7 +10,7 @@ Dialog {
     title: "Ignore file extensions"
     modal: true
     width: 520
-    height: Math.max(400, rootWindow.height - Kirigami.Units.gridUnit * 6)
+    height: Math.max(400, rootWindow.height - 18 * 6)
     x: Math.round((rootWindow.width - width) / 2)
     y: Math.round((rootWindow.height - height) / 2)
     standardButtons: Dialog.Close
@@ -19,12 +18,12 @@ Dialog {
     onOpened: ignoreFileExtensionField.text = ""
 
     contentItem: ColumnLayout {
-        spacing: Kirigami.Units.largeSpacing
+        spacing: 12
 
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: Kirigami.Theme.disabledTextColor
+            color: rootWindow.palette.placeholderText
             text: "Files with these extensions will be skipped during scanning. You can enter values like .tmp or tmp."
         }
 
@@ -33,22 +32,22 @@ Dialog {
             Layout.fillHeight: true
             clip: true
             model: appBridge ? appBridge.ignoreFileExtensions : []
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 6
 
             delegate: Rectangle {
                 required property string modelData
                 width: ListView.view.width
                 radius: 8
-                color: Kirigami.Theme.alternateBackgroundColor
-                border.color: Kirigami.Theme.disabledTextColor
+                color: rootWindow.palette.alternateBase
+                border.color: rootWindow.palette.placeholderText
                 border.width: 1
-                implicitHeight: extensionRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+                implicitHeight: extensionRow.implicitHeight + 6 * 2
 
                 RowLayout {
                     id: extensionRow
                     anchors.fill: parent
-                    anchors.margins: Kirigami.Units.smallSpacing
-                    spacing: Kirigami.Units.smallSpacing
+                    anchors.margins: 6
+                    spacing: 6
 
                     Label {
                         Layout.fillWidth: true
@@ -65,7 +64,7 @@ Dialog {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 6
 
             TextField {
                 id: ignoreFileExtensionField
