@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+# Select Qt's bundled style before importing Qt modules, so a desktop-specific
+# QML style cannot be loaded before QQuickStyle is configured in main().
+os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Fusion")
 
 from PySide6.QtCore import QLibraryInfo, QSettings, QTimer
 from PySide6.QtGui import QGuiApplication, QIcon
@@ -64,9 +69,10 @@ def main() -> int:
     if test_settings:
         QSettings.setDefaultFormat(QSettings.IniFormat)
         QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, test_settings.name)
-    # Custom control backgrounds need a non-native style on Windows.
-    if sys.platform == "win32":
-        QQuickStyle.setStyle("Fusion")
+    # Keep controls independent of optional desktop styles. Some installed
+    # third-party styles (notably older Breeze QML styles) fail on controls
+    # used here, while Fusion is shipped with Qt on every supported platform.
+    QQuickStyle.setStyle("Fusion")
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Duplicate Cleaner")
     app.setOrganizationName("isojanis")

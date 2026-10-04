@@ -41,6 +41,15 @@ TEXT_SUFFIXES = {
 }
 
 
+def _format_byte_count(value: int) -> str:
+    amount = float(max(0, value))
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if amount < 1024 or unit == "TB":
+            return f"{int(amount)} {unit}" if unit == "B" else f"{amount:.1f} {unit}"
+        amount /= 1024
+    return f"{amount:.1f} TB"
+
+
 class ScanWorker(QObject):
     progress = Signal(dict)
     finished = Signal(dict)
@@ -158,7 +167,13 @@ class AppBridge(QObject):
             "groupCount": 0,
             "duplicateFiles": 0,
             "hashCandidates": 0,
+            "hashWorkCandidates": 0,
             "hashedFiles": 0,
+            "hashCandidatesProcessed": 0,
+            "hashBytesProcessed": 0,
+            "hashTotalBytes": 0,
+            "currentFileBytes": 0,
+            "currentFileSize": 0,
             "wastedBytes": 0,
         }
         self._is_scanning = False
@@ -298,7 +313,13 @@ class AppBridge(QObject):
             "groupCount": 0,
             "duplicateFiles": 0,
             "hashCandidates": 0,
+            "hashWorkCandidates": 0,
             "hashedFiles": 0,
+            "hashCandidatesProcessed": 0,
+            "hashBytesProcessed": 0,
+            "hashTotalBytes": 0,
+            "currentFileBytes": 0,
+            "currentFileSize": 0,
             "wastedBytes": 0,
         }
         self.scanSummaryChanged.emit()
@@ -928,18 +949,34 @@ class AppBridge(QObject):
             "groupCount": progress["liveGroupCount"],
             "duplicateFiles": progress["liveDuplicateFiles"],
             "hashCandidates": progress["hashCandidates"],
+            "hashWorkCandidates": progress["hashWorkCandidates"],
             "hashedFiles": progress["hashedFiles"],
+            "hashCandidatesProcessed": progress["hashCandidatesProcessed"],
+            "hashBytesProcessed": progress["hashBytesProcessed"],
+            "hashTotalBytes": progress["hashTotalBytes"],
+            "currentFileBytes": progress["currentFileBytes"],
+            "currentFileSize": progress["currentFileSize"],
         }
         self.scanSummaryChanged.emit()
 
-        status = (
-            f"{progress['phase']} {progress['totalFiles']} files, "
-            f"{progress['totalFolders']} folders, {progress['skippedFiles']} skipped."
-        )
+        if progress["hashCandidates"]:
+            work_candidates = progress["hashWorkCandidates"]
+            status = (
+                f"Comparing file contents: {progress['hashCandidatesProcessed']} of "
+                f"{work_candidates} candidates checked, "
+                f"{_format_byte_count(progress['hashBytesProcessed'] + progress['currentFileBytes'])} of "
+                f"{_format_byte_count(progress['hashTotalBytes'])} candidate bytes read; "
+                f"{progress['skippedFiles']} skipped."
+            )
+        else:
+            status = (
+                f"Finding candidates: {progress['totalFiles']} eligible files checked across "
+                f"{progress['totalFolders']} folders; {progress['skippedFiles']} skipped."
+            )
         if progress["liveGroupCount"]:
             status += (
-                f" Found duplicates: {progress['liveGroupCount']} groups / "
-                f"{progress['liveDuplicateFiles']} files."
+                f" Found {progress['liveGroupCount']} groups / "
+                f"{progress['liveDuplicateFiles']} duplicate files."
             )
         self.setStatusText(status)
 
@@ -959,7 +996,13 @@ class AppBridge(QObject):
             "groupCount": results["groupCount"],
             "duplicateFiles": results["duplicateFiles"],
             "hashCandidates": self._scan_summary.get("hashCandidates", 0),
+            "hashWorkCandidates": self._scan_summary.get("hashWorkCandidates", 0),
             "hashedFiles": self._scan_summary.get("hashedFiles", 0),
+            "hashCandidatesProcessed": self._scan_summary.get("hashCandidatesProcessed", 0),
+            "hashBytesProcessed": self._scan_summary.get("hashBytesProcessed", 0),
+            "hashTotalBytes": self._scan_summary.get("hashTotalBytes", 0),
+            "currentFileBytes": 0,
+            "currentFileSize": 0,
             "wastedBytes": results["wastedBytes"],
         }
         self.scanSummaryChanged.emit()

@@ -1,25 +1,26 @@
 Name:           duplicate-cleaner
 Version:        0.1.0
 Release:        1%{?dist}
-Summary:        KDE-friendly duplicate file cleaner
+Summary:        Cross-platform duplicate file cleaner
 License:        MIT
-URL:            https://example.invalid/duplicate-cleaner
+URL:            https://github.com/isojanis/duplicate_cleaner
 Source0:        duplicate_cleaner-%{version}.tar.gz
 BuildArch:      noarch
 BuildRequires:  desktop-file-utils
 BuildRequires:  pyproject-rpm-macros
+BuildRequires:  python3-build
 BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
 BuildRequires:  python3-wheel
 Requires:       python3
 Requires:       python3-pyside6
 Requires:       qt6-qtdeclarative
-Requires:       qt6-qtquickcontrols2
 Requires:       qt6-qtpdf
+Requires:       qt6-qtsvg
 Requires:       xdg-utils
 
 %description
-Duplicate Cleaner is a KDE-friendly desktop application for finding and deleting duplicate files.
+Duplicate Cleaner is a Qt desktop application for finding identical files on Linux and Windows.
 
 %prep
 %autosetup -n duplicate_cleaner-%{version}
@@ -37,6 +38,7 @@ desktop-file-validate packaging/rpm/duplicate-cleaner.desktop
 
 %files
 %doc README.md
+%license LICENSE
 %{_bindir}/duplicate-cleaner
 %{python3_sitelib}/duplicate_cleaner/
 %{python3_sitelib}/duplicate_cleaner-*.dist-info/

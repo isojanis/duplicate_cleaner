@@ -127,7 +127,7 @@ Frame {
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         color: rootWindow.mutedText
-                        text: appBridge && appBridge.isScanning ? "Comparing file contents. Results appear when the scan finishes."
+                        text: appBridge && appBridge.isScanning ? appBridge.statusText
                             : ["Limited", "Stopped", "Failed"].indexOf(resultsPane.scanPhase) !== -1 ? appBridge.statusText
                             : resultsPane.scanPhase === "Complete" ? "No duplicates were found with the current filters."
                             : "Choose a folder and start a scan. Review matching files here before deciding what to remove."

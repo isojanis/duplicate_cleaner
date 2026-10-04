@@ -21,6 +21,8 @@ python -m pip install -e '.[dev]' --no-deps
 python -m duplicate_cleaner
 ```
 
+The editable install provides the `duplicate-cleaner` entry point as well; `PYTHONPATH=src` is only needed when running directly from an uninstalled checkout. The application defaults Qt Quick Controls to Fusion, so a shell style override is not normally needed.
+
 The existing VS Code host tasks remain available. For an isolated pip-based Qt environment instead, create a fresh environment **without** system site packages and install `.[portable,dev]`. Do not inject host QML/plugin paths into a pip Qt runtime.
 
 ## Windows: run from source
@@ -37,7 +39,7 @@ Windows dependencies install PySide6 automatically. Folder opening uses the OS d
 
 ## Windows: portable executable
 
-Build **on Windows** using 64-bit Python 3.13 and a dedicated environment:
+Build **on Windows** using 64-bit Python 3.13 and a dedicated environment. The pinned build dependencies are in `packaging/windows/requirements-build.txt`:
 
 ```powershell
 py -3.13 -m venv .venv-build
@@ -46,7 +48,7 @@ python -m pip install -r packaging/windows/requirements-build.txt
 .\packaging\windows\build.ps1
 ```
 
-The script builds a folder-based executable, runs its startup smoke check, and writes `dist/DuplicateCleaner-windows-x64.zip`. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Native Windows acceptance testing is required before release.
+The script builds a folder-based executable, runs its startup smoke check, and writes `dist/DuplicateCleaner-<version>-windows-x64.zip` with a `.sha256` sidecar. The bundle includes the project README and license. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Fill in the license template and review bundled third-party license notices before distribution, including the applicable [Qt for Python license terms](https://doc.qt.io/qtforpython-6/commercial/index.html). Native Windows acceptance testing is required before release.
 
 ## Tests and packages
 
@@ -61,9 +63,9 @@ python -m build
 
 On headless Linux use `QT_QPA_PLATFORM=offscreen` and, when needed, `QT_QUICK_BACKEND=software`. The smoke check opens the complete QML interface using temporary settings and exits with a failure status if it cannot load or emits QML warnings. Unit tests use temporary files/settings and mock Trash operations; they do not remove your files.
 
-Both wheels and source archives include the interface and icon. On an RPM build host with the spec's BuildRequires installed, run `sh packaging/rpm/build-rpm.sh`. The script builds a source archive from the manifest, avoiding virtual environments and existing build output. RPM installs package-local UI assets along with the desktop entry and icon. The RPM spec is Fedora-style and still needs validation on a native RPM host.
+Both wheels and source archives include the interface and icon. On a Fedora RPM build host with the spec's BuildRequires installed, run `sh packaging/rpm/build-rpm.sh`. The script builds a source archive from the manifest, avoiding virtual environments and existing build output, then places RPMs under `dist/rpm/RPMS/`. RPM installs package-local UI assets along with the desktop entry, icon, and license file. The RPM spec is Fedora-style and still needs validation on a native RPM host. `LICENSE` is an MIT template with placeholder copyright fields; fill those in before public distribution.
 
-GitHub Actions defines Linux/Windows tests, installed-wheel startup checks, and a Windows executable artifact build. These workflows must pass on the remote runners; adding the workflow does not mean it has already run.
+GitHub Actions defines Linux/Windows tests, installed-wheel startup checks, and a Windows executable artifact build. These workflows must pass on the remote runners; adding the workflow does not mean it has already run. The Windows artifact job produces a versioned ZIP and SHA-256 sidecar; it does not publish a GitHub Release.
 
 See [PLAN.md](PLAN.md) for milestones and [NOTES.md](NOTES.md) for verified status and remaining release checks.
 

@@ -1,5 +1,7 @@
 # Build on Windows; the same recipe can be smoke-tested on Linux.
 from pathlib import Path
+import sys
+
 from PyInstaller.utils.hooks import copy_metadata
 
 root = Path(SPECPATH).parents[1]
@@ -7,6 +9,7 @@ data = [
     (str(root / "qml"), "duplicate_cleaner/resources/qml"),
     (str(root / "packaging/assets"), "duplicate_cleaner/resources/assets"),
     (str(root / "README.md"), "."),
+    (str(root / "LICENSE"), "."),
 ]
 for package in ("PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"):
     data += copy_metadata(package)
@@ -21,5 +24,13 @@ a = Analysis(
     excludes=["PyQt5", "PyQt6", "PySide2"],
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="DuplicateCleaner", console=False)
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="DuplicateCleaner",
+    console=False,
+    icon=str(root / "packaging/assets/duplicate-cleaner.ico") if sys.platform == "win32" else None,
+)
 coll = COLLECT(exe, a.binaries, a.datas, name="DuplicateCleaner")

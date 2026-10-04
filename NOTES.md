@@ -16,56 +16,57 @@ Implemented:
 - Text, image, and PDF preview handling.
 - Individual file deletion with confirmation and deleted-state updates.
 - Smart cleanup for same-folder filename/hash candidates.
-- Qt Quick/Kirigami interface with scan, results, preview, filter, and cleanup panels.
-- Basic RPM packaging metadata and desktop integration.
+- Qt Quick interface with scan, results, preview, filter, and cleanup panels; KDE/Kirigami is not required.
+- Recoverable deletion through the system Trash / Windows Recycle Bin, with asynchronous revalidation and cancellation.
+- Live scan status distinguishes candidate discovery from hashing and reports byte progress within large files.
+- Portable wheel and PyInstaller build recipes for Windows and Linux smoke validation.
+- Windows portable build emits a versioned ZIP and SHA-256 sidecar; its archive includes README and LICENSE.
+- RPM packaging metadata and desktop integration.
 
 ## Verification completed
 
-- `python3 -m compileall -q src/duplicate_cleaner` passes.
-- A temporary-folder smoke test successfully found three identical files in one duplicate group.
-- The Python wheel contains the current Python package, including `scanner.py`.
+- `python3 -m compileall -q src tests packaging/windows/launcher.py` passes.
+- 21 regression tests pass, including scanner, bridge, cleanup-worker, live hash progress, and full QML loading tests.
+- The suite passes with both the isolated PySide6 environment and native Fedora Qt packages.
+- The built wheel contains the full QML tree and icon and launches outside the source checkout.
+- The PyInstaller recipe builds and its Linux frozen executable startup smoke test passes.
+- The minimum 960×680 UI was visually checked; the preview pane scrolls and populated results load without QML warnings.
 
 ## Known gaps
 
-- There is no automated test suite.
-- `README.md` still describes scanning and deletion as placeholders; that is no longer accurate.
-- The wheel does not include the QML interface.
-- The RPM spec installs `qml/Main.qml` but not `qml/components/*.qml`, even though `Main.qml` imports that directory.
-- The application has not yet been validated end-to-end from an installed RPM or a clean environment with the host Qt/Kirigami stack.
-- Generated packaging/build output is currently present as untracked worktree content (`build/`, `dist/`, and generated `egg-info` changes). Decide whether these belong in version control or should be ignored.
+- RPM build validation is pending because the native Fedora host lacks `pyproject-rpm-macros`, `python3-build`, and the RPM build dependency set. The build helper now checks for its local build tool and writes package artifacts under `dist/rpm/`.
+- `LICENSE` is an MIT template with placeholder year and copyright holder; complete those fields before distribution.
+- Native Windows execution and acceptance testing are pending.
+- The updated Windows ZIP, checksum, and executable icon path were not run locally; this Fedora host has no PowerShell or PyInstaller. The Windows CI job must validate the build script.
+- Review licenses/notices for bundled PySide6/Qt and other third-party components before distributing the Windows archive.
+- GitHub Actions has been added but has not run from this workspace.
+- Local generated output may still appear from earlier builds; `build/`, `dist/`, `*.egg-info/`, caches, and temporary virtual environments are now ignored for future builds.
+- The ignored wheel currently in `dist/` is stale and does not contain the packaged QML or icon; rebuild it before using that artifact for validation.
 
 ## Next-step plan
 
 ### 1. Make packaging runnable
 
-- Update the RPM spec to install the complete `qml/` tree, including all component files.
-- Decide on the distribution strategy for QML: package it as RPM data files, include it in the Python distribution, or both.
-- Rebuild the wheel/RPM and test launching from the installed layout.
-- Verify the desktop entry, icon, QML imports, and Qt PDF/Kirigami dependencies.
+- Update the RPM host dependencies and run a native RPM build/install check.
+- Verify the desktop entry, icon, QML imports, and Qt PDF dependencies on Fedora.
 
 ### 2. Add regression tests
 
-- Add scanner tests for identical files, different files, empty-file handling, recursion, size filters, extension filters, folder patterns, search limits, and cancellation.
-- Add bridge tests for size parsing, settings persistence, deletion behavior, preview metadata, and smart cleanup.
-- Keep tests independent of a graphical display where possible.
+- Run the new suite in GitHub Actions and fix any platform-specific failures.
 
 ### 3. Correct project documentation and repository hygiene
 
-- Update `README.md` from “UI scaffold” language to the current prototype capabilities and limitations.
-- Document how to run the scanner smoke tests and how to build/install packages.
-- Add appropriate `.gitignore` entries for virtual environments, build output, distributions, caches, and generated metadata if those files are not intentionally tracked.
-- Regenerate metadata only through the documented build workflow.
+- Review generated metadata before committing and keep it out of the source change unless intentionally regenerated.
 
 ### 4. Validate the user workflow
 
-- Run the application on the target host Qt/Kirigami environment.
-- Test scan, cancel, preview, delete, smart cleanup, and filter changes manually.
-- Check behavior for unreadable files, symlinks, files disappearing during a scan, invalid paths, and very large files.
-- Review destructive-action messaging and confirm that deletion behavior matches the intended product policy.
+- Run the application manually on Fedora and Windows.
+- Test scan, cancel, preview, delete, smart cleanup, and filter changes on both hosts.
+- Exercise unreadable files, links, disappearing files, invalid paths, and large files.
+- On Windows, extract the built versioned ZIP on a clean Windows 10/11 x64 system, verify its SHA-256 sidecar, and confirm the included README and completed license.
 
 ### 5. Prepare a first release candidate
 
-- Resolve packaging and test failures.
-- Choose and document the supported Linux distribution(s) and dependency versions.
-- Build from a clean checkout and verify the resulting artifact in a clean runtime environment.
-- Tag a release only after the installed-package workflow passes.
+- Resolve remaining RPM and native Windows validation failures.
+- Build from a clean checkout and verify the resulting artifacts in clean runtime environments.
+- Tag a release only after both native package workflows pass.

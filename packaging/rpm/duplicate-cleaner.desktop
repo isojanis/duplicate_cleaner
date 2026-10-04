@@ -6,6 +6,6 @@ Comment=Find and delete duplicate files
 Exec=duplicate-cleaner
 Icon=duplicate-cleaner
 Terminal=false
-Categories=Utility;FileTools;Qt;KDE;
+Categories=Utility;FileTools;Qt;
 Keywords=duplicates;files;cleanup;scanner;
 StartupNotify=true

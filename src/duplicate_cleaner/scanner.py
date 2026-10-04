@@ -12,6 +12,7 @@ from .safety import fingerprint
 
 ProgressCallback = Callable[[dict[str, object]], None]
 CancelCallback = Callable[[], bool]
+HashProgressCallback = Callable[[int], None]
 
 PROGRESS_INTERVAL_SECONDS = 0.1
 
@@ -20,13 +21,18 @@ def _file_hash(
     path: Path,
     chunk_size: int = 1024 * 1024,
     should_cancel: CancelCallback | None = None,
+    progress_callback: HashProgressCallback | None = None,
 ) -> str | None:
     digest = sha256()
+    bytes_read = 0
     with path.open("rb") as handle:
         while chunk := handle.read(chunk_size):
             if should_cancel is not None and should_cancel():
                 return None
             digest.update(chunk)
+            bytes_read += len(chunk)
+            if progress_callback is not None:
+                progress_callback(bytes_read)
     return digest.hexdigest()
 
 
@@ -110,7 +116,13 @@ def scan_for_duplicates(
     live_group_count = 0
     live_duplicate_files = 0
     hash_candidates = 0
+    hash_work_candidates = 0
     hashed_files = 0
+    hash_candidates_processed = 0
+    hash_bytes_processed = 0
+    hash_total_bytes = 0
+    current_file_bytes = 0
+    current_file_size = 0
     last_progress_at = 0.0
     search_limit_reached = False
     compiled_ignore_folder_patterns = [
@@ -139,7 +151,13 @@ def scan_for_duplicates(
                 "liveGroupCount": live_group_count,
                 "liveDuplicateFiles": live_duplicate_files,
                 "hashCandidates": hash_candidates,
+                "hashWorkCandidates": hash_work_candidates,
                 "hashedFiles": hashed_files,
+                "hashCandidatesProcessed": hash_candidates_processed,
+                "hashBytesProcessed": hash_bytes_processed,
+                "hashTotalBytes": hash_total_bytes,
+                "currentFileBytes": current_file_bytes,
+                "currentFileSize": current_file_size,
             }
         )
 
@@ -229,6 +247,23 @@ def scan_for_duplicates(
             emit_progress("Scanning file...")
 
     hash_candidates = sum(len(paths) for paths in files_by_size.values() if len(paths) > 1)
+    hash_work_candidates = (
+        min(hash_candidates, max(0, duplicate_search_limit))
+        if use_duplicate_search_limit
+        else hash_candidates
+    )
+    remaining_hash_candidates = (
+        max(0, duplicate_search_limit)
+        if use_duplicate_search_limit
+        else hash_candidates
+    )
+    for size, paths in files_by_size.items():
+        if len(paths) < 2 or remaining_hash_candidates <= 0:
+            continue
+        candidates_in_group = min(len(paths), remaining_hash_candidates)
+        hash_total_bytes += size * candidates_in_group
+        remaining_hash_candidates -= candidates_in_group
+
     duplicate_groups: list[dict[str, object]] = []
     def matching_groups(size: int, hashes: dict[str, list[Path]]) -> list[dict[str, object]]:
         groups = _matching_groups_for_size(size, hashes)
@@ -243,7 +278,7 @@ def scan_for_duplicates(
 
         files_by_hash: dict[str, list[Path]] = defaultdict(list)
         for path in paths:
-            if use_duplicate_search_limit and hashed_files >= duplicate_search_limit:
+            if use_duplicate_search_limit and hash_candidates_processed >= duplicate_search_limit:
                 search_limit_reached = True
                 emit_progress("Reached duplicate search limit.", force=True)
                 break
@@ -258,18 +293,35 @@ def scan_for_duplicates(
                 )
 
             current_path = str(path)
+            current_file_bytes = 0
+            current_file_size = size
+
+            def report_hash_progress(bytes_read: int) -> None:
+                nonlocal current_file_bytes
+                current_file_bytes = bytes_read
+                emit_progress("Hashing duplicate candidates...")
+
             try:
                 if fingerprint(path) != snapshots[str(path)]:
                     raise OSError("File changed since discovery")
-                file_hash = _file_hash(path, should_cancel=should_cancel)
+                file_hash = _file_hash(
+                    path,
+                    should_cancel=should_cancel,
+                    progress_callback=report_hash_progress,
+                )
                 if fingerprint(path) != snapshots[str(path)]:
                     raise OSError("File changed while hashing")
             except OSError:
                 skipped_files += 1
+                hash_candidates_processed += 1
+                hash_bytes_processed += current_file_bytes
+                current_file_bytes = 0
+                current_file_size = 0
                 emit_progress("Skipping unreadable file during hashing...", force=True)
                 continue
 
             if file_hash is None:
+                emit_progress("Stopping scan...", force=True)
                 return _cancelled_result(
                     folder,
                     total_files=total_files,
@@ -288,6 +340,10 @@ def scan_for_duplicates(
                 live_duplicate_files += 1
 
             hashed_files += 1
+            hash_candidates_processed += 1
+            hash_bytes_processed += size
+            current_file_bytes = 0
+            current_file_size = 0
             emit_progress("Hashing duplicate candidates...")
 
         duplicate_groups.extend(matching_groups(size, files_by_hash))

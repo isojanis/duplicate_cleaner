@@ -70,6 +70,20 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(result["duplicateFiles"], 2)
         self.assertEqual(len(result["groups"][0]["snapshots"]), 2)
 
+    def test_hash_progress_reports_bytes_within_large_files(self):
+        payload = b"x" * (3 * 1024 * 1024)
+        self.write("a-large.bin", payload)
+        self.write("b-large.bin", payload)
+        progress = []
+        with patch("duplicate_cleaner.scanner.PROGRESS_INTERVAL_SECONDS", 0):
+            result = self.scan(progress_callback=progress.append)
+
+        hashing_updates = [item for item in progress if item["phase"] == "Hashing duplicate candidates..."]
+        self.assertTrue(any(item["currentFileBytes"] for item in hashing_updates))
+        self.assertEqual(result["groupCount"], 1)
+        self.assertEqual(hashing_updates[-1]["hashTotalBytes"], 2 * len(payload))
+        self.assertEqual(hashing_updates[-1]["hashWorkCandidates"], 2)
+
     def test_invalid_root(self):
         with self.assertRaises(ValueError):
             scan_for_duplicates(self.root / "missing")

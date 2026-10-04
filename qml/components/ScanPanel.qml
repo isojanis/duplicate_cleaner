@@ -318,8 +318,13 @@ Frame {
             visible: appBridge && appBridge.isScanning
             indeterminate: !appBridge || !appBridge.scanSummary.hashCandidates
             from: 0
-            to: appBridge && appBridge.scanSummary ? Math.max(1, appBridge.scanSummary.hashCandidates) : 1
-            value: appBridge && appBridge.scanSummary ? appBridge.scanSummary.hashedFiles : 0
+            to: appBridge && appBridge.scanSummary ? Math.max(1, appBridge.scanSummary.hashWorkCandidates) : 1
+            value: appBridge && appBridge.scanSummary
+                ? appBridge.scanSummary.hashCandidatesProcessed
+                    + (appBridge.scanSummary.currentFileSize > 0
+                        ? appBridge.scanSummary.currentFileBytes / appBridge.scanSummary.currentFileSize
+                        : 0)
+                : 0
         }
         Label {
             Layout.fillWidth: true
