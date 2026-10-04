@@ -15,6 +15,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
 from .bridge import AppBridge
+from . import scroll_input  # Register the QML wheel-input adapter before loading the UI.
 
 
 INSTALLED_QML_PATHS = (

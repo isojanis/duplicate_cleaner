@@ -6,8 +6,9 @@ import time
 import unittest
 from unittest.mock import patch
 
-from PySide6.QtCore import QSettings, QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QSettings, QSize, QUrl
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QImageReader, QPainter, QPdfWriter
+from PySide6.QtPdf import QPdfDocument
 from duplicate_cleaner.bridge import AppBridge, MAX_TEXT_PREVIEW_BYTES
 from duplicate_cleaner.scanner import scan_for_duplicates
 
@@ -43,6 +44,18 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(self.bridge._normalize_path(url), str(path))
         self.assertEqual(self.bridge.fileUrl(str(path)).toLocalFile(), str(path))
 
+    @unittest.skipUnless(os.name == "nt", "Native Windows path semantics")
+    def test_windows_drive_and_unc_url_round_trip(self):
+        for value in (r"C:\Users\Example\space # percent% café.txt", r"\\server\share\space # café.txt"):
+            with self.subTest(path=value):
+                expected = os.path.normcase(os.path.normpath(value))
+                url = QUrl.fromLocalFile(value).toString()
+                normalized = self.bridge._normalize_path(url)
+                self.assertEqual(os.path.normcase(normalized), expected)
+                self.assertEqual(os.path.normcase(os.path.normpath(
+                    self.bridge.fileUrl(value).toLocalFile()
+                )), expected)
+
     def test_size_parsing_and_large_qt_property(self):
         self.bridge.setMaxFileSizeText("8 GB")
         self.assertEqual(self.bridge.property("maxFileSizeBytes"), 8 * 1024**3)
@@ -60,6 +73,35 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(len(preview["textContent"]), MAX_TEXT_PREVIEW_BYTES)
         self.assertTrue(preview["isTruncated"])
         self.assertIn("changed", preview["fileHash"])
+
+    def test_image_preview_url_can_be_decoded(self):
+        path = self.root / "image # café.png"
+        image = QImage(16, 16, QImage.Format.Format_RGB32)
+        image.fill(QColor("red"))
+        self.assertTrue(image.save(str(path)))
+        self.bridge.selectPreviewFile(str(path))
+        preview = self.bridge.get_preview_data()
+        self.assertEqual(preview["previewKind"], "image")
+        reader = QImageReader(QUrl(preview["previewUrl"]).toLocalFile())
+        self.assertEqual(reader.read().size(), QSize(16, 16))
+
+    def test_pdf_preview_url_can_be_rendered(self):
+        path = self.root / "document # café.pdf"
+        writer = QPdfWriter(str(path))
+        painter = QPainter(writer)
+        painter.fillRect(0, 0, 100, 100, QColor("blue"))
+        painter.end()
+        del writer
+        self.bridge.selectPreviewFile(str(path))
+        preview = self.bridge.get_preview_data()
+        self.assertEqual(preview["previewKind"], "pdf")
+        document = QPdfDocument()
+        try:
+            document.load(QUrl(preview["previewUrl"]).toLocalFile())
+            self.assertEqual(document.pageCount(), 1)
+            self.assertFalse(document.render(0, QSize(128, 128)).isNull())
+        finally:
+            document.close()
 
     def test_trash_success_and_last_copy(self):
         a, b = self.duplicates()

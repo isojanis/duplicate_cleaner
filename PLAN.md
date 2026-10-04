@@ -10,7 +10,8 @@ Deliver a polished Linux duplicate cleaner and a Windows version sharing the sca
 
 - [x] Ship all QML components and the application icon in distributable artifacts.
 - [x] Resolve assets from an installed package, source checkout, and frozen executable.
-- [ ] Fix RPM installation and file ownership declarations.
+- [x] Define RPM installation paths, runtime dependencies, and file ownership declarations.
+- [ ] Build and install the RPM on Fedora, then validate the installed launcher and assets.
 - [x] Verify wheel and source archive contents and launch from an installed layout.
 
 ### 2. Linux workflow and safeguards
@@ -27,6 +28,11 @@ Deliver a polished Linux duplicate cleaner and a Windows version sharing the sca
 - [x] Test cleanup selection and deletion safeguards with temporary fixtures.
 - [x] Test asset resolution and platform-specific integration.
 - [x] Add continuous integration for Linux and Windows.
+- [x] Test progress throttling when many entries cannot be read.
+- [x] Add smooth duplicate-list wheel scrolling and touchpad coasting for phase-aware and phase-less input; test momentum, reversal, bounds, and scrollbar interruption.
+- [x] Exercise image decoding and PDF rendering through preview file URLs.
+- [x] Add Windows archive checksum and missing-content rejection tests.
+- [ ] Run the native Windows drive/UNC, junction, and Recycle Bin integration tests.
 
 ### 4. Windows delivery
 
@@ -34,8 +40,10 @@ Deliver a polished Linux duplicate cleaner and a Windows version sharing the sca
 - [x] Support Windows paths, file URLs, and opening files in Explorer.
 - [x] Declare Windows runtime dependencies separately from Linux host packages.
 - [x] Pin the Windows executable build dependencies in a separate requirements file.
-- [x] Provide a reproducible Windows executable build and installation instructions.
+- [x] Provide a repeatable Windows executable build recipe and installation instructions.
 - [x] Include the app icon, project license, and README in the portable bundle; emit a versioned ZIP and checksum.
+- [x] Implement validation of the extracted ZIP outside the checkout, from a path containing spaces and Unicode.
+- [ ] Run the updated Windows build and extracted executable validation on a Windows runner.
 - [ ] Validate the packaged app on native Windows, including scanning, previews, cancellation, and deletion.
 - [ ] Complete license and bundled third-party notice review before distribution.
 
@@ -47,6 +55,10 @@ Deliver a polished Linux duplicate cleaner and a Windows version sharing the sca
 - [x] Record local verification results and checks requiring another host in NOTES.md.
 - [ ] Complete native Linux and Windows acceptance checks before declaring release readiness.
 - [ ] Verify the Windows ZIP and checksum from a clean Windows 10/11 x64 environment.
+
+## Current validation status
+
+The local suite has 39 tests: 33 pass on Fedora and six require native Windows or PowerShell. Native Windows execution is still pending; the repository's GitHub Actions page/API returned 404 without an authenticated session. See NOTES.md for the build results and remaining release checks. A Linux frozen build does not establish Windows compatibility.
 
 ## Completion policy
 

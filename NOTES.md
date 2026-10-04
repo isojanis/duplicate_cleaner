@@ -4,69 +4,41 @@ Last reviewed: 2026-10-04
 
 ## Current status
 
-The project is a functional prototype rather than a UI-only scaffold.
+The application implements scanning, filtering, live progress, duplicate grouping, text/image/PDF previews, and guarded cleanup through the system Trash or Windows Recycle Bin. Source, wheel, RPM, and Windows portable build recipes are present. Native package acceptance remains incomplete.
 
-Implemented:
+Recent fixes:
 
-- Duplicate scanning by file size and SHA-256 content hash.
-- Recursive scanning with cancellation and progress reporting.
-- File filters for empty files, size range, extensions, folder regexes, and a single extension.
-- Persistent scan preferences and recent folders through `QSettings`.
-- Duplicate results grouped by matching content, with reclaimable-space summaries.
-- Text, image, and PDF preview handling.
-- Individual file deletion with confirmation and deleted-state updates.
-- Smart cleanup for same-folder filename/hash candidates.
-- Qt Quick interface with scan, results, preview, filter, and cleanup panels; KDE/Kirigami is not required.
-- Recoverable deletion through the system Trash / Windows Recycle Bin, with asynchronous revalidation and cancellation.
-- Live scan status distinguishes candidate discovery from hashing and reports byte progress within large files.
-- Portable wheel and PyInstaller build recipes for Windows and Linux smoke validation.
-- Windows portable build emits a versioned ZIP and SHA-256 sidecar; its archive includes README and LICENSE.
-- RPM packaging metadata and desktop integration.
+- Duplicate-list mouse-wheel input now glides with easing and accumulates repeated steps. Touchpad scrolling preserves OS momentum when supplied and estimates a short native coast when phase or momentum events are missing; scrollbar interaction stops the glide.
+- Windows directory junction detection now uses file metadata available on Python 3.11, rather than relying on the newer `Path.is_junction()` API.
+- Unreadable entries now obey the scan progress throttle, preventing an immediate queued UI update for every failed file. Final counts still arrive in the completion update.
 
-## Verification completed
+Windows packaging now requires an x64 Python 3.13 interpreter, verifies the delivered ZIP and checksum, and smoke-tests the extracted executable outside the checkout from a path containing spaces and Unicode. Development Python/QML search paths are cleared for that process. The preflight sends Python code over stdin so embedded quotes are preserved by Windows PowerShell as well as PowerShell Core.
 
-- `python3 -m compileall -q src tests packaging/windows/launcher.py` passes.
-- 21 regression tests pass, including scanner, bridge, cleanup-worker, live hash progress, and full QML loading tests.
-- The suite passes with both the isolated PySide6 environment and native Fedora Qt packages.
-- The built wheel contains the full QML tree and icon and launches outside the source checkout.
-- The PyInstaller recipe builds and its Linux frozen executable startup smoke test passes.
-- The minimum 960×680 UI was visually checked; the preview pane scrolls and populated results load without QML warnings.
+## Validation completed in this review
 
-## Known gaps
+- Latest full suite after phase-less touchpad support: 39 tests discovered, 33 passed and six skipped (native Windows behavior and PowerShell-only archive checks unavailable on this Linux host). Six scrolling input tests cover wheel glide/accumulation, reversal/bounds, phase-aware and phase-less touchpad coasting, and scrollbar interruption.
+- Added coverage for unreadable-file progress throttling, independent hard-link/symlink handling, junction metadata, PNG decoding, PDF rendering, and archive checksum/missing-content rejection.
+- Added native Windows drive/UNC URL, actual directory junction, and opt-in Recycle Bin tests. They are wired into Windows CI but have not executed here.
+- Both PowerShell scripts parse with temporary PowerShell 7.6.6. Archive rejection tests execute with that runtime; this does not validate Windows PowerShell 5.1 or Windows process launch behavior.
+- The source archive and wheel build. The wheel contains the full QML tree, SVG/ICO assets, and license; the source archive contains the Windows recipe and validator.
+- The installed wheel starts outside the checkout with the headless startup smoke check.
+- The shared PyInstaller recipe builds with the pinned dependencies in an isolated environment; its Linux frozen executable passes the startup smoke check outside the checkout with development import paths cleared. Build-time warnings concern an unused Qt labs asset-downloader plugin and the optional `xxsubtype` import; no runtime QML warnings occurred.
+- RPM spec expansion, build helper shell syntax, desktop entry validation, and diff whitespace checks pass.
 
-- RPM build validation is pending because the native Fedora host lacks `pyproject-rpm-macros`, `python3-build`, and the RPM build dependency set. The build helper now checks for its local build tool and writes package artifacts under `dist/rpm/`.
-- `LICENSE` is an MIT template with placeholder year and copyright holder; complete those fields before distribution.
-- Native Windows execution and acceptance testing are pending.
-- The updated Windows ZIP, checksum, and executable icon path were not run locally; this Fedora host has no PowerShell or PyInstaller. The Windows CI job must validate the build script.
-- Review licenses/notices for bundled PySide6/Qt and other third-party components before distributing the Windows archive.
-- GitHub Actions has been added but has not run from this workspace.
-- Local generated output may still appear from earlier builds; `build/`, `dist/`, `*.egg-info/`, caches, and temporary virtual environments are now ignored for future builds.
-- The ignored wheel currently in `dist/` is stale and does not contain the packaged QML or icon; rebuild it before using that artifact for validation.
+Validation outputs are under `/tmp/duplicate-cleaner-artifacts/`, `/tmp/duplicate-cleaner-frozen-dist/`, and `/tmp/duplicate-cleaner-*.log`. These are local validation artifacts, not Windows release assets. Generated metadata from the checks is restored afterward rather than committed.
 
-## Next-step plan
+## Remaining release checks
 
-### 1. Make packaging runnable
+- Native Windows execution is unverified. No Windows host is connected. The GitHub Actions API and browser page for the configured remote returned 404 without an authenticated session; no remote run result could be inspected or dispatched.
+- Run the updated Windows CI matrix and executable build. The build must pass extracted-ZIP validation, then the app needs manual scan, cancellation, image/PDF preview, cleanup, and Recycle Bin restore checks on a clean Windows 10/11 x64 machine.
+- The Windows CI matrix enables `DUPLICATE_CLEANER_TEST_TRASH=1`; that integration test moves only a freshly created disposable fixture and verifies the surviving copy remains. It may leave that fixture in the Recycle Bin.
+- Build and install the RPM on Fedora. The system interpreter still lacks the RPM build dependency set, including `pyproject-rpm-macros`, `python3-build`, `python3-setuptools`, and `python3-wheel`. Temporary Python build environments used for this review do not satisfy those RPM dependencies.
+- Fill `[YEAR]` and `[COPYRIGHT HOLDER]` in the MIT license template and finish bundled third-party license/notice review before distribution.
+- Confirm the unsigned portable Windows distribution and run native acceptance before tagging or publishing a release.
 
-- Update the RPM host dependencies and run a native RPM build/install check.
-- Verify the desktop entry, icon, QML imports, and Qt PDF dependencies on Fedora.
+## Next actions
 
-### 2. Add regression tests
-
-- Run the new suite in GitHub Actions and fix any platform-specific failures.
-
-### 3. Correct project documentation and repository hygiene
-
-- Review generated metadata before committing and keep it out of the source change unless intentionally regenerated.
-
-### 4. Validate the user workflow
-
-- Run the application manually on Fedora and Windows.
-- Test scan, cancel, preview, delete, smart cleanup, and filter changes on both hosts.
-- Exercise unreadable files, links, disappearing files, invalid paths, and large files.
-- On Windows, extract the built versioned ZIP on a clean Windows 10/11 x64 system, verify its SHA-256 sidecar, and confirm the included README and completed license.
-
-### 5. Prepare a first release candidate
-
-- Resolve remaining RPM and native Windows validation failures.
-- Build from a clean checkout and verify the resulting artifacts in clean runtime environments.
-- Tag a release only after both native package workflows pass.
+1. Obtain an authenticated Windows CI run for the current changes and fix any native failures.
+2. Complete manual Windows acceptance using the ZIP and its checksum, including restoring a disposable file from the Recycle Bin.
+3. Install the Fedora build prerequisites and validate the resulting RPM installation.
+4. Complete the license placeholders and third-party notices, then prepare release artifacts from the reviewed commit.

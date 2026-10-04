@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import time
 from collections import defaultdict
 from hashlib import sha256
@@ -15,6 +16,15 @@ CancelCallback = Callable[[], bool]
 HashProgressCallback = Callable[[int], None]
 
 PROGRESS_INTERVAL_SECONDS = 0.1
+
+
+def _is_link_directory(path: Path) -> bool:
+    """Exclude symlinks and Windows junctions, including on Python 3.11."""
+    info = path.lstat()
+    return stat.S_ISLNK(info.st_mode) or (
+        getattr(info, "st_reparse_tag", 0)
+        == getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+    )
 
 
 def _file_hash(
@@ -164,7 +174,7 @@ def scan_for_duplicates(
     def handle_walk_error(_error: OSError) -> None:
         nonlocal skipped_files
         skipped_files += 1
-        emit_progress("Skipping unreadable entry...", force=True)
+        emit_progress("Skipping unreadable entry...")
 
     for root_path, dirnames, filenames in os.walk(folder, onerror=handle_walk_error):
         current_root = Path(root_path)
@@ -172,7 +182,12 @@ def scan_for_duplicates(
             filtered_dirnames: list[str] = []
             for dirname in dirnames:
                 directory_path = current_root / dirname
-                if directory_path.is_symlink() or getattr(directory_path, "is_junction", lambda: False)():
+                try:
+                    is_link = _is_link_directory(directory_path)
+                except OSError as exc:
+                    handle_walk_error(exc)
+                    continue
+                if is_link:
                     continue
                 directory_text = directory_path.as_posix() + "/"
                 if any(pattern.search(directory_text) for pattern in compiled_ignore_folder_patterns):
@@ -214,7 +229,7 @@ def scan_for_duplicates(
                 size = identity[2]
             except OSError:
                 skipped_files += 1
-                emit_progress("Skipping unreadable file...", force=True)
+                emit_progress("Skipping unreadable file...")
                 continue
 
             if not path.is_file():
@@ -317,7 +332,7 @@ def scan_for_duplicates(
                 hash_bytes_processed += current_file_bytes
                 current_file_bytes = 0
                 current_file_size = 0
-                emit_progress("Skipping unreadable file during hashing...", force=True)
+                emit_progress("Skipping unreadable file during hashing...")
                 continue
 
             if file_hash is None:

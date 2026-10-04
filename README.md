@@ -48,7 +48,15 @@ python -m pip install -r packaging/windows/requirements-build.txt
 .\packaging\windows\build.ps1
 ```
 
-The script builds a folder-based executable, runs its startup smoke check, and writes `dist/DuplicateCleaner-<version>-windows-x64.zip` with a `.sha256` sidecar. The bundle includes the project README and license. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Fill in the license template and review bundled third-party license notices before distribution, including the applicable [Qt for Python license terms](https://doc.qt.io/qtforpython-6/commercial/index.html). Native Windows acceptance testing is required before release.
+The script requires an x64 Python 3.13 interpreter and writes `dist/DuplicateCleaner-<version>-windows-x64.zip` with a `.sha256` sidecar. It verifies the checksum and required files, extracts to a temporary path with spaces and Unicode outside the checkout, and runs the extracted executable's startup smoke check with development Python/QML paths cleared. To select Python without activating the environment, pass `-Python .\.venv-build\Scripts\python.exe` to `build.ps1`.
+
+The bundle includes the project README and license. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Fill in the license template and review bundled third-party license notices before distribution, including the applicable [Qt for Python license terms](https://doc.qt.io/qtforpython-6/commercial/index.html). Native Windows acceptance testing is required before release.
+
+To validate an existing archive on Windows, keep its `.sha256` file beside it and run:
+
+```powershell
+.\packaging\windows\validate-portable.ps1 -Archive .\dist\DuplicateCleaner-0.1.0-windows-x64.zip
+```
 
 ## Tests and packages
 
@@ -61,7 +69,9 @@ python -m pip install build
 python -m build
 ```
 
-On headless Linux use `QT_QPA_PLATFORM=offscreen` and, when needed, `QT_QUICK_BACKEND=software`. The smoke check opens the complete QML interface using temporary settings and exits with a failure status if it cannot load or emits QML warnings. Unit tests use temporary files/settings and mock Trash operations; they do not remove your files.
+On headless Linux use `QT_QPA_PLATFORM=offscreen` and, when needed, `QT_QUICK_BACKEND=software`. The smoke check opens the complete QML interface using temporary settings and exits with a failure status if it cannot load or emits QML warnings. Tests use temporary files/settings. Archive rejection tests require PowerShell (`pwsh` or `powershell`); native Windows path and junction tests skip on other systems.
+
+Trash operations are mocked by default. The Windows CI matrix explicitly sets `DUPLICATE_CLEANER_TEST_TRASH=1` to enable the Recycle Bin integration test: it moves one newly created, disposable test file to the Recycle Bin and verifies the surviving copy is retained. Set that environment variable when running native acceptance tests locally as well. The generated test file can remain in the Recycle Bin afterward.
 
 Both wheels and source archives include the interface and icon. On a Fedora RPM build host with the spec's BuildRequires installed, run `sh packaging/rpm/build-rpm.sh`. The script builds a source archive from the manifest, avoiding virtual environments and existing build output, then places RPMs under `dist/rpm/RPMS/`. RPM installs package-local UI assets along with the desktop entry, icon, and license file. The RPM spec is Fedora-style and still needs validation on a native RPM host. `LICENSE` is an MIT template with placeholder copyright fields; fill those in before public distribution.
 

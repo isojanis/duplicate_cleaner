@@ -19,16 +19,18 @@ Frame {
         border.width: 1
     }
 
-    ScrollView {
+    SmoothFlickable {
         id: resultsPaneScroll
+        objectName: "duplicateResultsScroll"
         anchors.fill: parent
         anchors.margins: 1
-        clip: true
+        contentHeight: resultsColumn.implicitHeight + 40
 
         ColumnLayout {
+            id: resultsColumn
             x: 20
             y: 20
-            width: Math.max(0, resultsPaneScroll.availableWidth - 40)
+            width: Math.max(0, resultsPaneScroll.width - 40)
             spacing: 6
 
             RowLayout {
@@ -70,6 +72,7 @@ Frame {
                 }
 
                 ComboBox {
+                    objectName: "sortFieldCombo"
                     Layout.preferredWidth: 150
                     model: [
                         { text: "Size of files", value: "size" },
@@ -77,10 +80,13 @@ Frame {
                     ]
                     textRole: "text"
                     Component.onCompleted: currentIndex = appBridge && appBridge.sortField === "count" ? 1 : 0
-                    onActivated: if (appBridge) appBridge.setSortField(model[index].value)
+                    onActivated: function(index) {
+                        if (appBridge) appBridge.setSortField(model[index].value)
+                    }
                 }
 
                 ComboBox {
+                    objectName: "sortDirectionCombo"
                     Layout.preferredWidth: 130
                     model: [
                         { text: "Descending", value: "descending" },
@@ -88,7 +94,9 @@ Frame {
                     ]
                     textRole: "text"
                     Component.onCompleted: currentIndex = appBridge && appBridge.sortDirection === "ascending" ? 1 : 0
-                    onActivated: if (appBridge) appBridge.setSortDirection(model[index].value)
+                    onActivated: function(index) {
+                        if (appBridge) appBridge.setSortDirection(model[index].value)
+                    }
                 }
 
                 Item { Layout.fillWidth: true }

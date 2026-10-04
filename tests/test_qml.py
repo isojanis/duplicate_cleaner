@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QObject, QSettings, QtMsgType, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -36,6 +36,26 @@ class QmlTests(unittest.TestCase):
             bridge._complete_scan(scan_for_duplicates(Path(tmp)))
             bridge.selectPreviewFile(str(Path(tmp) / "a.txt"))
             app.processEvents()
+            # Context deprecations are Qt log messages, not engine.warnings.
+            interaction_warnings = []
+            def capture_message(kind, context, message):
+                if kind in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg, QtMsgType.QtFatalMsg):
+                    interaction_warnings.append(message)
+            previous_handler = qInstallMessageHandler(capture_message)
+            try:
+                for name, prop, values in (
+                    ("sortFieldCombo", "sortField", ("size", "count")),
+                    ("sortDirectionCombo", "sortDirection", ("descending", "ascending")),
+                ):
+                    combo = root.findChild(QObject, name)
+                    self.assertIsNotNone(combo)
+                    for index in (1, 0):
+                        combo.activated.emit(index)
+                        app.processEvents()
+                        self.assertEqual(bridge.property(prop), values[index])
+            finally:
+                qInstallMessageHandler(previous_handler)
+            self.assertEqual(interaction_warnings, [])
             self.assertEqual(warnings, [])
             root.close()
             bridge.shutdown()

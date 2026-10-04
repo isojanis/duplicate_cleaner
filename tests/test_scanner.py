@@ -1,9 +1,13 @@
 from pathlib import Path
+import os
+import stat
+import subprocess
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from duplicate_cleaner.scanner import scan_for_duplicates
+from duplicate_cleaner.scanner import _is_link_directory, scan_for_duplicates
 from duplicate_cleaner.safety import validate_removal
 
 
@@ -88,14 +92,68 @@ class ScannerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scan_for_duplicates(self.root / "missing")
 
-    def test_links_do_not_inflate_reclaimable_space(self):
+    def test_hardlinks_do_not_inflate_reclaimable_space(self):
         original = self.write("original")
         try:
             (self.root / "hardlink").hardlink_to(original)
+        except OSError:
+            self.skipTest("Hard link creation unavailable")
+        self.assertEqual(self.scan()["groupCount"], 0)
+
+    def test_symlinks_are_not_scanned(self):
+        original = self.write("original")
+        try:
             (self.root / "symlink").symlink_to(original)
         except OSError:
-            self.skipTest("Link creation unavailable")
+            self.skipTest("Symbolic link creation unavailable")
         self.assertEqual(self.scan()["groupCount"], 0)
+
+    def test_junction_tag_is_detected_without_path_is_junction(self):
+        info = SimpleNamespace(st_mode=stat.S_IFDIR, st_reparse_tag=0xA0000003)
+        with patch.object(Path, "lstat", return_value=info):
+            self.assertTrue(_is_link_directory(self.root))
+
+    @unittest.skipUnless(os.name == "nt", "Native Windows junction test")
+    def test_windows_junction_outside_scan_root_is_not_followed(self):
+        with TemporaryDirectory() as outside:
+            for name in ("a", "b"):
+                (Path(outside) / name).write_bytes(b"same")
+            junction = self.root / "junction"
+            subprocess.run(
+                ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), outside],
+                check=True, capture_output=True,
+            )
+            try:
+                result = self.scan()
+                self.assertEqual(result["totalFiles"], 0)
+                self.assertEqual(result["groupCount"], 0)
+            finally:
+                junction.rmdir()
+
+    def test_unreadable_files_do_not_flood_progress_queue(self):
+        for index in range(100):
+            self.write(f"file-{index}")
+        progress = []
+        with patch("duplicate_cleaner.scanner.time.monotonic", return_value=1.0), patch(
+            "duplicate_cleaner.scanner.fingerprint", side_effect=PermissionError("unreadable")
+        ):
+            result = self.scan(progress_callback=progress.append)
+        self.assertEqual(result["skippedFiles"], 100)
+        self.assertLessEqual(len(progress), 3)
+        self.assertEqual(progress[-1]["phase"], "Scan complete.")
+        self.assertEqual(progress[-1]["skippedFiles"], 100)
+
+    def test_hash_read_errors_are_counted_without_flooding_progress(self):
+        for index in range(100):
+            self.write(f"file-{index}")
+        progress = []
+        with patch("duplicate_cleaner.scanner.time.monotonic", return_value=1.0), patch(
+            "duplicate_cleaner.scanner._file_hash", side_effect=PermissionError("unreadable")
+        ):
+            result = self.scan(progress_callback=progress.append)
+        self.assertEqual(result["skippedFiles"], 100)
+        self.assertLessEqual(len(progress), 3)
+        self.assertEqual(progress[-1]["hashCandidatesProcessed"], 100)
 
     def test_changed_during_hash_is_skipped(self):
         first = self.write("a")
