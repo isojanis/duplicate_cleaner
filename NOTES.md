@@ -33,12 +33,10 @@ Validation outputs are under `/tmp/duplicate-cleaner-artifacts/`, `/tmp/duplicat
 - Run the updated Windows CI matrix and executable build. The build must pass extracted-ZIP validation, then the app needs manual scan, cancellation, image/PDF preview, cleanup, and Recycle Bin restore checks on a clean Windows 10/11 x64 machine.
 - The Windows CI matrix enables `DUPLICATE_CLEANER_TEST_TRASH=1`; that integration test moves only a freshly created disposable fixture and verifies the surviving copy remains. It may leave that fixture in the Recycle Bin.
 - Build and install the RPM on Fedora. The system interpreter still lacks the RPM build dependency set, including `pyproject-rpm-macros`, `python3-build`, `python3-setuptools`, and `python3-wheel`. Temporary Python build environments used for this review do not satisfy those RPM dependencies.
-- Fill `[YEAR]` and `[COPYRIGHT HOLDER]` in the MIT license template and finish bundled third-party license/notice review before distribution.
+- ~~Fill `[YEAR]` and `[COPYRIGHT HOLDER]` in the MIT license template and finish bundled third-party license/notice review before distribution.~~ ✅ MIT license issued to `isojanis`, 2026. `THIRD_PARTY_NOTICES` written and added to `MANIFEST.in`.
 - Confirm the unsigned portable Windows distribution and run native acceptance before tagging or publishing a release.
 
 ## Next actions
 
-1. Obtain an authenticated Windows CI run for the current changes and fix any native failures.
-2. Complete manual Windows acceptance using the ZIP and its checksum, including restoring a disposable file from the Recycle Bin.
-3. Install the Fedora build prerequisites and validate the resulting RPM installation.
-4. Complete the license placeholders and third-party notices, then prepare release artifacts from the reviewed commit.
+1. Complete manual Windows acceptance using the portable ZIP in a Windows 10/11 x64 VM (see `windows-vm-testing.md`), including restoring a disposable file from the Recycle Bin.
+2. Install the Fedora build prerequisites and validate the resulting RPM installation.
