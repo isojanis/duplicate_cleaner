@@ -1,0 +1,70 @@
+Third-Party Notices — Duplicate Cleaner
+========================================
+
+This application uses the following third-party software. Each component is
+governed by its own license, which is reproduced or referenced below.
+
+
+────────────────────────────────────────────────────────────────────────────────
+PySide6  (and the Qt libraries it bundles)
+────────────────────────────────────────────────────────────────────────────────
+
+Copyright (C) The Qt Company Ltd. and other contributors.
+
+PySide6 and the Qt libraries it packages are distributed under the terms of the
+GNU Lesser General Public License version 3 (LGPLv3), with additional
+permissions as described in the Qt LGPL Exception version 1.1.
+
+License text:
+  https://www.gnu.org/licenses/lgpl-3.0.html
+
+Qt LGPL Exception 1.1:
+  https://www.qt.io/licensing/open-source-lgpl-obligations#lgpl-exception
+
+Source code for Qt and PySide6:
+  https://code.qt.io/
+  https://github.com/qt/qt5
+  https://github.com/pyside/pyside-setup
+
+In accordance with LGPLv3 §4, the Qt and PySide6 shared libraries distributed
+with or alongside this application may be replaced by the end-user with a
+compatible version. The application is structured such that the PySide6/Qt
+libraries are not statically merged into the application's own code and can be
+substituted without recompilation of Duplicate Cleaner itself.
+
+Note on Qt modules used:
+  QtCore, QtGui, QtQml, QtQuick, QtQuickControls2
+  All are available under LGPLv3. No GPL-only Qt modules are used.
+
+
+────────────────────────────────────────────────────────────────────────────────
+Python standard library
+────────────────────────────────────────────────────────────────────────────────
+
+The Python interpreter and standard library are distributed under the Python
+Software Foundation License version 2 (PSFLv2), which is compatible with the
+MIT License under which Duplicate Cleaner is released.
+
+  https://docs.python.org/3/license.html
+
+
+────────────────────────────────────────────────────────────────────────────────
+Build-time tools (not distributed with the application)
+────────────────────────────────────────────────────────────────────────────────
+
+The following tools are used only during development or packaging and are not
+included in any distributed artifact:
+
+  PyInstaller  — GPLv2+ with a special exception that allows bundling of
+                 non-GPL application code. Not distributed; used only to
+                 produce the portable Windows executable.
+                 https://pyinstaller.org/en/stable/license.html
+
+  setuptools   — MIT License
+                 https://github.com/pypa/setuptools
+
+  build        — MIT License
+                 https://github.com/pypa/build
+
+  debugpy      — MIT License
+                 https://github.com/microsoft/debugpy
