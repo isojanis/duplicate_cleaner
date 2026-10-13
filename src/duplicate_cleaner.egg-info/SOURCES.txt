@@ -1,9 +1,13 @@
+LICENSE
 MANIFEST.in
 NOTES.md
 PLAN.md
 README.md
+THIRD_PARTY_NOTICES
 pyproject.toml
 setup.py
+windows-vm-testing.md
+packaging/assets/duplicate-cleaner.ico
 packaging/assets/duplicate-cleaner.svg
 packaging/rpm/build-rpm.sh
 packaging/rpm/duplicate-cleaner.desktop
@@ -12,6 +16,7 @@ packaging/windows/build.ps1
 packaging/windows/duplicate-cleaner.spec
 packaging/windows/launcher.py
 packaging/windows/requirements-build.txt
+packaging/windows/validate-portable.ps1
 qml/Main.qml
 qml/components/ActionButton.qml
 qml/components/IgnoreExtensionsDialog.qml
@@ -20,6 +25,7 @@ qml/components/MagicCleanupDialog.qml
 qml/components/PreviewPane.qml
 qml/components/ResultsPane.qml
 qml/components/ScanPanel.qml
+qml/components/SmoothFlickable.qml
 src/duplicate_cleaner/__init__.py
 src/duplicate_cleaner/__main__.py
 src/duplicate_cleaner/app.py
@@ -27,6 +33,7 @@ src/duplicate_cleaner/bridge.py
 src/duplicate_cleaner/cleanup.py
 src/duplicate_cleaner/safety.py
 src/duplicate_cleaner/scanner.py
+src/duplicate_cleaner/scroll_input.py
 src/duplicate_cleaner.egg-info/PKG-INFO
 src/duplicate_cleaner.egg-info/SOURCES.txt
 src/duplicate_cleaner.egg-info/dependency_links.txt
@@ -37,3 +44,5 @@ tests/test_bridge.py
 tests/test_cleanup.py
 tests/test_qml.py
 tests/test_scanner.py
+tests/test_scrolling.py
+tests/test_windows_package.py
