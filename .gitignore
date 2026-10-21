@@ -5,3 +5,8 @@ build/
 *.egg-info/
 .pytest_cache/
 .venv-*/
+
+# Generated release and coverage outputs
+dist/
+.coverage*
+htmlcov/

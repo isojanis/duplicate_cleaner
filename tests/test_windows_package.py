@@ -19,6 +19,11 @@ class WindowsArchiveTests(unittest.TestCase):
             archive = Path(tmp) / "DuplicateCleaner-test.zip"
             files = (
                 "DuplicateCleaner.exe", "_internal/LICENSE", "_internal/THIRD_PARTY_NOTICES", "_internal/README.md",
+                "_internal/LICENSE_AUDIT.md",
+                "_internal/LICENSES/LGPL-3.0-only.txt",
+                "_internal/LICENSES/GPL-3.0-only.txt",
+                "_internal/LICENSES/PyInstaller-COPYING.txt",
+                "_internal/LICENSES/Python/LICENSE.txt",
                 "_internal/duplicate_cleaner/resources/qml/Main.qml",
                 "_internal/duplicate_cleaner/resources/qml/components/ResultsPane.qml",
                 "_internal/duplicate_cleaner/resources/assets/duplicate-cleaner.svg",
@@ -46,6 +51,10 @@ class WindowsArchiveTests(unittest.TestCase):
 
     def test_missing_notices_are_rejected_before_launch(self):
         self.assertIn("missing _internal/THIRD_PARTY_NOTICES", self.validate_fixture(missing="_internal/THIRD_PARTY_NOTICES"))
+
+    def test_missing_python_license_is_rejected_before_launch(self):
+        path = "_internal/LICENSES/Python/LICENSE.txt"
+        self.assertIn("missing " + path, self.validate_fixture(missing=path))
 
     def test_missing_qml_is_rejected_before_launch(self):
         path = "_internal/duplicate_cleaner/resources/qml/Main.qml"

@@ -2,6 +2,21 @@
 
 Last reviewed: 2026-10-21
 
+## Latest license re-audit
+
+The previous document-presence checks were insufficient to establish binary
+license compliance. See `LICENSE_AUDIT.md` for the current findings and release
+status. Full base license texts are now included; third-party attribution and
+corresponding-source delivery for frozen binaries remain open. Windows CI
+continues build/startup tests but no longer uploads the unreviewed binary.
+Legacy downloads were backed up locally and removed from the current tree;
+generated egg-info is no longer tracked. Historical validation below does not
+constitute clearance for public binary distribution.
+
+Latest verification: 59 tests discovered, 51 passed, eight Windows/PowerShell
+skips. Fresh wheel and source archives pass exact-content checks for all legal
+documents and packaged QML/assets.
+
 ## Current status
 
 The application implements scanning, filtering, live progress, duplicate grouping, text/image/PDF previews, and guarded cleanup through the system Trash or Windows Recycle Bin. Source, wheel, RPM, and Windows portable build recipes are present. Native package acceptance remains incomplete.

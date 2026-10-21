@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Preserve the hashes recorded for verbatim upstream license texts.
+LICENSES/* text eol=lf

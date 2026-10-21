@@ -20,6 +20,11 @@ try {
         '_internal/LICENSE',
         '_internal/THIRD_PARTY_NOTICES',
         '_internal/README.md',
+        '_internal/LICENSE_AUDIT.md',
+        '_internal/LICENSES/LGPL-3.0-only.txt',
+        '_internal/LICENSES/GPL-3.0-only.txt',
+        '_internal/LICENSES/PyInstaller-COPYING.txt',
+        '_internal/LICENSES/Python/LICENSE.txt',
         '_internal/duplicate_cleaner/resources/qml/Main.qml',
         '_internal/duplicate_cleaner/resources/qml/components/ResultsPane.qml',
         '_internal/duplicate_cleaner/resources/assets/duplicate-cleaner.svg'

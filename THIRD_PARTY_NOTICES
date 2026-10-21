@@ -1,73 +1,75 @@
-Third-Party Notices — Duplicate Cleaner
-========================================
+Third-party notices — Duplicate Cleaner
+======================================
 
-This application uses the following third-party software. Each component is
-governed by its own license. This file is an index of license and source links;
-it is not a complete collection of the license and copyright texts bundled
-with every platform-specific binary. Review the resolved distribution contents
-and include the applicable full notices before publishing a binary release.
+Scope
+-----
+Duplicate Cleaner's own Python/QML code and project assets are covered by the
+MIT license in LICENSE. Dependencies retain their own licenses. Source archives
+and wheels produced by this project do not bundle the Python interpreter or Qt
+libraries. RPMs depend on the distribution's Qt/PySide packages. Frozen Windows
+bundles include runtime dependencies and require a separate artifact audit.
 
-
-────────────────────────────────────────────────────────────────────────────────
-PySide6  (and the Qt libraries it bundles)
-────────────────────────────────────────────────────────────────────────────────
-
+Qt for Python (PySide6 and Shiboken6), and Qt
+-------------------------------------------
 Copyright (C) The Qt Company Ltd. and other contributors.
 
-PySide6 and the Qt libraries it packages are distributed under the terms of the
-GNU Lesser General Public License version 3 (LGPLv3), with additional
-permissions as described in the Qt LGPL Exception version 1.1.
+The application uses the LGPLv3 option where offered by the relevant upstream
+component. Full LGPLv3 and GPLv3 texts are in LICENSES/. We do not claim that a
+single exception or license covers every Qt module or third-party component.
 
-License text:
-  https://www.gnu.org/licenses/lgpl-3.0.html
+Application imports include QtCore, QtGui, QtQml, QtQuick, QtQuickControls2,
+QtPdf, and QtSvg. QML imports include QtQuick Controls, Layouts, Dialogs, and Pdf.
+PyInstaller can collect additional libraries, QML modules, and plugins. Imports
+alone do not establish the full contents or licensing of a frozen bundle.
 
-Qt LGPL Exception 1.1:
-  https://www.qt.io/licensing/open-source-lgpl-obligations#lgpl-exception
+The Windows recipe pins PySide6 6.11.2. Qt PDF and Qt SVG offer LGPLv3 for this
+release; their embedded dependencies retain separate license and notice terms.
 
-Source code for Qt and PySide6:
-  https://code.qt.io/
-  https://github.com/qt/qt5
-  https://github.com/pyside/pyside-setup
+License references:
+  https://doc.qt.io/qtforpython-6/licenses.html
+  https://doc.qt.io/qt-6.11/licensing.html
+  https://doc.qt.io/qt-6.11/qtpdf-index.html
+  https://doc.qt.io/qt-6.11/qtsvg-index.html
+  https://doc.qt.io/qt-6.11/licenses-used-in-qt.html
 
-In accordance with LGPLv3 §4, the Qt and PySide6 shared libraries distributed
-with or alongside this application may be replaced by the end-user with a
-compatible version. The application is structured such that the PySide6/Qt
-libraries are not statically merged into the application's own code and can be
-substituted without recompilation of Duplicate Cleaner itself.
+Upstream sources (references, not a distributor's source offer):
+  https://code.qt.io/cgit/pyside/pyside-setup.git/tag/?h=v6.11.2
+  https://code.qt.io/cgit/qt/qtbase.git/tag/?h=v6.11.2
+  https://code.qt.io/cgit/qt/qtdeclarative.git/tag/?h=v6.11.2
+  https://code.qt.io/cgit/qt/qtwebengine.git/tag/?h=v6.11.2
+  https://code.qt.io/cgit/qt/qtsvg.git/tag/?h=v6.11.2
 
-Note on Qt modules used:
-  QtCore, QtGui, QtQml, QtQuick, QtQuickControls2
-  All are available under LGPLv3. No GPL-only Qt modules are used.
+Users may modify the LGPL-covered components and reverse engineer the combined
+work for debugging those modifications as allowed by the LGPL. This project
+imposes no additional restriction on those rights. The one-folder build keeps
+shared libraries separate. Compatible-library replacement and corresponding
+source delivery must still be verified for the actual distributed artifact.
 
-
-────────────────────────────────────────────────────────────────────────────────
-Python standard library
-────────────────────────────────────────────────────────────────────────────────
-
-The Python interpreter and standard library are distributed under the Python
-Software Foundation License version 2 (PSFLv2), which is compatible with the
-MIT License under which Duplicate Cleaner is released.
-
+Python
+------
+Python includes the PSF license and notices for incorporated software. A
+Windows test bundle carries LICENSE.txt from its build interpreter under
+LICENSES/Python/. Record the exact Python patch version when auditing a bundle;
+review bundled extension libraries and their additional notices as well.
   https://docs.python.org/3/license.html
 
+PyInstaller
+-----------
+PyInstaller contributes a bootloader, loader code, and runtime hooks to frozen
+bundles. Its bootloader exception permits distribution of combined executables;
+runtime hooks and certain runtime modules use Apache-2.0. The full upstream
+COPYING.txt for the pinned 6.22.3 version is in LICENSES/PyInstaller-COPYING.txt.
+  https://pyinstaller.org/en/stable/license.html
 
-────────────────────────────────────────────────────────────────────────────────
-Build-time tools (not distributed with the application)
-────────────────────────────────────────────────────────────────────────────────
+Development tools
+-----------------
+setuptools, build, and debugpy are development/build dependencies, not declared
+application runtime dependencies. Their installation does not by itself imply
+that their code is bundled. Inspect the frozen dependency inventory before
+making claims about exactly which code is distributed.
 
-The following tools are used during development or packaging. PyInstaller
-also contributes a bootloader to the portable Windows executable:
-
-  PyInstaller  — GPLv2+ with a special exception that allows bundling of
-                 non-GPL application code. Its bootloader is included in
-                 the portable Windows executable.
-                 https://pyinstaller.org/en/stable/license.html
-
-  setuptools   — MIT License
-                 https://github.com/pypa/setuptools
-
-  build        — MIT License
-                 https://github.com/pypa/build
-
-  debugpy      — MIT License
-                 https://github.com/microsoft/debugpy
+Release status
+--------------
+Frozen Windows builds are engineering test builds. Complete per-artifact
+third-party attribution, source-delivery, and library-replacement review is
+still required. LICENSE_AUDIT.md records the evidence and remaining work.

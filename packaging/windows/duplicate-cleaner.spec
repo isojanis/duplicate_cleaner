@@ -11,7 +11,15 @@ data = [
     (str(root / "README.md"), "."),
     (str(root / "LICENSE"), "."),
     (str(root / "THIRD_PARTY_NOTICES"), "."),
+    (str(root / "LICENSE_AUDIT.md"), "."),
+    (str(root / "LICENSES"), "LICENSES"),
 ]
+if sys.platform == "win32":
+    python_license = Path(sys.base_prefix) / "LICENSE.txt"
+    if not python_license.is_file():
+        raise RuntimeError("The build interpreter's LICENSE.txt is required.")
+    data.append((str(python_license), "LICENSES/Python"))
+
 for package in ("PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"):
     data += copy_metadata(package)
 

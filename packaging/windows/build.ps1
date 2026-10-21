@@ -25,7 +25,7 @@ print(json.dumps(dict(version=version, python=list(sys.version_info[:2]), platfo
     $App = Join-Path $ProjectRoot 'dist/DuplicateCleaner/DuplicateCleaner.exe'
     if (-not (Test-Path $App)) { throw 'The executable was not created.' }
 
-    $ArtifactName = "DuplicateCleaner-$Version-windows-x64"
+    $ArtifactName = "DuplicateCleaner-$Version-windows-x64-unreviewed"
     $Archive = Join-Path $ProjectRoot "dist/$ArtifactName.zip"
     Compress-Archive -Path 'dist/DuplicateCleaner' -DestinationPath $Archive -Force
 
@@ -33,7 +33,8 @@ print(json.dumps(dict(version=version, python=list(sys.version_info[:2]), platfo
     "$($Checksum.Hash.ToLowerInvariant())  $ArtifactName.zip" |
         Set-Content -Path "$Archive.sha256" -Encoding ascii
     & (Join-Path $PSScriptRoot 'validate-portable.ps1') -Archive $Archive
-    Write-Host "Portable build: $Archive"
+    Write-Host "Unreviewed engineering test build: $Archive"
+    Write-Warning "Not cleared for public release. See LICENSE_AUDIT.md."
     Write-Host "SHA-256: $Archive.sha256"
 } finally {
     Pop-Location

@@ -10,9 +10,9 @@ python -m duplicate_cleaner --smoke-test
 python -m build
 ```
 
-CI runs these checks on Linux and Windows with Python 3.11 and 3.13. It also installs the built wheel outside the checkout and starts that installed application. The Windows artifact job builds a portable ZIP, checks its SHA-256 sidecar and required files, and launches the extracted executable from a path containing spaces and Unicode.
+CI runs these checks on Linux and Windows with Python 3.11 and 3.13. It also installs the built wheel outside the checkout and starts that installed application. The Windows build job creates an unreviewed test ZIP, checks its SHA-256 sidecar and required files, and launches the extracted executable from a path containing spaces and Unicode.
 
-The 2026-10-21 local run passed 45 tests with seven platform-specific skips (52 discovered), and the QML startup smoke check passed. Three consecutive full-suite runs passed. Branch-aware coverage measured 80% of Python code; this excludes QML and does not count the separate startup smoke process.
+The latest license re-audit run passed 51 tests with eight platform-specific skips (59 discovered). Fresh source and wheel builds passed the exact-content verification. The earlier test-coverage pass ran 52 tests three times and measured 80% Python branch-aware coverage; that measurement excludes QML and the separate startup smoke process. Coverage has not been remeasured after adding the packaging tests.
 
 | Area | Automated coverage | Remaining acceptance work |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ The 2026-10-21 local run passed 45 tests with seven platform-specific skips (52 
 | Cleanup safety | Changed target/survivor, final copy, unknown path, cancellation, Trash failure, opened-file identity after replacement, mixed batch continuing after a changed file | Native Linux Trash and Windows Recycle Bin restore, concurrent file replacement during OS move |
 | Interface | Offscreen QML load and Start scan action, scroll behavior, filter settings across restart, scan cancellation/failure, stale-result clearing, preview, status, worker shutdown | Keyboard, screen reader, scaling, dark/light themes on real desktops |
 | Packages | Wheel startup, Windows ZIP checksum/content/startup rejection cases | Install and launch RPM on supported Fedora versions; native Windows release acceptance |
-| Licenses | Project MIT license and notice index included in package recipes | Collect and review complete platform-specific runtime license/copyright texts before public binary release |
+| Licenses | Exact packaged legal texts and metadata; rejection of missing, stale, or misplaced documents | Collect and review complete platform-specific runtime license/copyright texts before public binary release |
 
 The remaining automated gaps are mainly startup path selection and failure handling, dialogs and keyboard actions in QML, and native platform behavior. The startup smoke check covers the normal startup path outside the coverage run. Coverage is a guide to missing paths, not proof that file deletion is safe.
 
