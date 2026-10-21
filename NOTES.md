@@ -1,6 +1,6 @@
 # Duplicate Cleaner — Project Notes
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-21
 
 ## Current status
 
@@ -14,7 +14,7 @@ Recent fixes:
 
 Windows packaging now requires an x64 Python 3.13 interpreter, verifies the delivered ZIP and checksum, and smoke-tests the extracted executable outside the checkout from a path containing spaces and Unicode. Development Python/QML search paths are cleared for that process. The preflight sends Python code over stdin so embedded quotes are preserved by Windows PowerShell as well as PowerShell Core.
 
-## Validation completed in this review
+## Previous validation (2026-10-04)
 
 - Latest full suite after phase-less touchpad support: 39 tests discovered, 33 passed and six skipped (native Windows behavior and PowerShell-only archive checks unavailable on this Linux host). Six scrolling input tests cover wheel glide/accumulation, reversal/bounds, phase-aware and phase-less touchpad coasting, and scrollbar interruption.
 - Added coverage for unreadable-file progress throttling, independent hard-link/symlink handling, junction metadata, PNG decoding, PDF rendering, and archive checksum/missing-content rejection.
@@ -33,8 +33,16 @@ Validation outputs are under `/tmp/duplicate-cleaner-artifacts/`, `/tmp/duplicat
 - Run the updated Windows CI matrix and executable build. The build must pass extracted-ZIP validation, then the app needs manual scan, cancellation, image/PDF preview, cleanup, and Recycle Bin restore checks on a clean Windows 10/11 x64 machine.
 - The Windows CI matrix enables `DUPLICATE_CLEANER_TEST_TRASH=1`; that integration test moves only a freshly created disposable fixture and verifies the surviving copy remains. It may leave that fixture in the Recycle Bin.
 - Build and install the RPM on Fedora. The system interpreter still lacks the RPM build dependency set, including `pyproject-rpm-macros`, `python3-build`, `python3-setuptools`, and `python3-wheel`. Temporary Python build environments used for this review do not satisfy those RPM dependencies.
-- ~~Fill `[YEAR]` and `[COPYRIGHT HOLDER]` in the MIT license template and finish bundled third-party license/notice review before distribution.~~ ✅ MIT license issued to `isojanis`, 2026. `THIRD_PARTY_NOTICES` written and added to `MANIFEST.in`.
+- The project MIT license is complete. The notice index now ships in wheel, Windows portable, and RPM recipes, but it does not contain every platform-specific dependency license/copyright text. Collect and review those texts before public binary distribution.
 - Confirm the unsigned portable Windows distribution and run native acceptance before tagging or publishing a release.
+
+## 2026-10-21 local quality pass
+
+- Added explicit MIT package metadata and verified the built wheel contains both `LICENSE` and `THIRD_PARTY_NOTICES`.
+- Added deterministic same-content file-swap tests and opened-file identity checks for scanning and cleanup validation. The 15 scanner and four new safety tests pass locally (one scanner test is Windows-only).
+- Installed PySide6 in a temporary directory and supplied missing native runtime libraries from a local runtime. The full headless suite passed: 52 tests run, 45 passed, seven platform-specific skips. Three consecutive full-suite runs passed. Python branch-aware coverage reached 80%; the separate startup smoke process and QML are not included. The QML startup smoke check also passed. The previous 2026-10-04 results above are historical.
+- Added `TEST_PLAN.md` and `SECURITY.md`; Windows archive validation now requires the notice index.
+- Added bridge, QML, and cleanup tests for filter wiring, settings reload, cancellation/failure, stale state, mixed batches, and the UI Start scan action. A new test exposed that smart cleanup missed numbered names such as `copy (1).txt`; that matching rule is now fixed.
 
 ## Next actions
 

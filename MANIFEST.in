@@ -1,4 +1,4 @@
-include README.md PLAN.md NOTES.md LICENSE THIRD_PARTY_NOTICES windows-vm-testing.md
+include README.md PLAN.md NOTES.md TEST_PLAN.md SECURITY.md LICENSE THIRD_PARTY_NOTICES windows-vm-testing.md
 recursive-include qml *.qml
 recursive-include packaging *.svg *.ico *.spec *.desktop *.sh *.py *.ps1 *.txt
 recursive-include tests *.py

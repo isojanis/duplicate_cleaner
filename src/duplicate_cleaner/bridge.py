@@ -417,9 +417,10 @@ class AppBridge(QObject):
                 except OSError:
                     continue
                 retained = ordered[0]
-                retained_name = retained.stem.lower()
+                retained_name = re.sub(r" \(\d+\)$", "", retained.stem.lower())
                 for candidate in ordered[1:]:
-                    distance = self._levenshtein_distance_with_limit(retained_name, candidate.stem.lower(), 3)
+                    candidate_name = re.sub(r" \(\d+\)$", "", candidate.stem.lower())
+                    distance = self._levenshtein_distance_with_limit(retained_name, candidate_name, 3)
                     if distance < 4:
                         normalized_candidate = str(candidate)
                         if normalized_candidate not in seen:

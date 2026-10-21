@@ -46,6 +46,27 @@ class CleanupTests(unittest.TestCase):
             self.assertTrue(results[0]["cancelled"])
             self.assertEqual(results[0]["removed"], 0)
 
+    def test_changed_file_is_skipped_and_batch_continues(self):
+        with TemporaryDirectory() as tmp:
+            paths = [Path(tmp) / name for name in ("changed", "discard", "retain")]
+            for path in paths:
+                path.write_bytes(b"same")
+            groups = scan_for_duplicates(Path(tmp))["groups"]
+            paths[0].write_bytes(b"different")
+            worker = CleanupWorker([str(paths[0]), str(paths[1])], groups, [])
+            results = []
+            moved = []
+            worker.finished.connect(results.append)
+            worker.moved.connect(moved.append)
+            with patch("duplicate_cleaner.cleanup.QFile") as file:
+                file.return_value.moveToTrash.return_value = True
+                worker.run()
+                file.assert_called_once_with(str(paths[1]))
+            self.assertEqual(moved, [str(paths[1])])
+            self.assertEqual(results[0]["removed"], 1)
+            self.assertEqual(len(results[0]["errors"]), 1)
+            self.assertIn("changed", results[0]["errors"][0])
+
     def test_unknown_path_is_refused(self):
         worker = CleanupWorker(["unscanned.txt"], [], [])
         results = []

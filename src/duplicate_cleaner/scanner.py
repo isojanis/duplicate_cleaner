@@ -9,7 +9,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Callable
 
-from .safety import fingerprint
+from .safety import _stat_fingerprint, fingerprint
 
 ProgressCallback = Callable[[dict[str, object]], None]
 CancelCallback = Callable[[], bool]
@@ -32,10 +32,13 @@ def _file_hash(
     chunk_size: int = 1024 * 1024,
     should_cancel: CancelCallback | None = None,
     progress_callback: HashProgressCallback | None = None,
+    expected: tuple[int, int, int, int, int] | None = None,
 ) -> str | None:
     digest = sha256()
     bytes_read = 0
     with path.open("rb") as handle:
+        if expected is not None and _stat_fingerprint(os.fstat(handle.fileno())) != expected:
+            raise OSError("File changed before hashing")
         while chunk := handle.read(chunk_size):
             if should_cancel is not None and should_cancel():
                 return None
@@ -43,6 +46,8 @@ def _file_hash(
             bytes_read += len(chunk)
             if progress_callback is not None:
                 progress_callback(bytes_read)
+        if expected is not None and _stat_fingerprint(os.fstat(handle.fileno())) != expected:
+            raise OSError("File changed while hashing")
     return digest.hexdigest()
 
 
@@ -323,6 +328,7 @@ def scan_for_duplicates(
                     path,
                     should_cancel=should_cancel,
                     progress_callback=report_hash_progress,
+                    expected=snapshots[str(path)],
                 )
                 if fingerprint(path) != snapshots[str(path)]:
                     raise OSError("File changed while hashing")

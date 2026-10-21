@@ -10,6 +10,7 @@ data = [
     (str(root / "packaging/assets"), "duplicate_cleaner/resources/assets"),
     (str(root / "README.md"), "."),
     (str(root / "LICENSE"), "."),
+    (str(root / "THIRD_PARTY_NOTICES"), "."),
 ]
 for package in ("PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"):
     data += copy_metadata(package)

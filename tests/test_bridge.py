@@ -2,6 +2,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 import time
 import unittest
 from unittest.mock import patch
@@ -22,6 +23,13 @@ class BridgeTests(unittest.TestCase):
             APP.processEvents()
             time.sleep(0.005)
         self.assertFalse(self.bridge.get_is_cleaning())
+    def wait_scan(self):
+        deadline = time.monotonic() + 10
+        while self.bridge.get_is_scanning() and time.monotonic() < deadline:
+            APP.processEvents()
+            time.sleep(0.005)
+        self.assertFalse(self.bridge.get_is_scanning())
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -139,6 +147,117 @@ class BridgeTests(unittest.TestCase):
         with patch("duplicate_cleaner.bridge.QDesktopServices.openUrl", return_value=True) as open_url:
             self.bridge.showInFolder(str(a))
             self.assertEqual(open_url.call_args.args[0].toLocalFile(), str(self.root))
+
+    def test_scan_respects_saved_extension_and_folder_filters(self):
+        for name in ("keep/alpha.txt", "keep/beta.TXT", "skip/alpha.txt", "skip/beta.txt"):
+            path = self.root / name
+            path.parent.mkdir(exist_ok=True)
+            path.write_bytes(b"same")
+        self.bridge.setUseOnlySearchFileExtension(True)
+        self.bridge.setOnlySearchFileExtensionText("TXT")
+        self.bridge.setUseIgnoreFolderPatterns(True)
+        self.bridge.addIgnoreFolderPattern(r"/skip/")
+        self.bridge.setSelectedFolder(str(self.root))
+        self.bridge.startScan()
+        self.wait_scan()
+        groups = self.bridge.get_duplicate_groups()
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(set(groups[0]["files"]), {
+            str(self.root / "keep/alpha.txt"), str(self.root / "keep/beta.TXT")
+        })
+        self.assertEqual(self.bridge.get_scan_summary()["phase"], "Complete")
+        self.assertEqual(self.bridge.get_only_search_file_extension(), ".txt")
+        self.assertEqual(self.settings.value("onlySearchFileExtension"), ".txt")
+        self.assertEqual(self.settings.value("ignoreFolderPatterns"), [r"/skip/"])
+
+    def test_switching_folder_clears_results_preview_and_deleted_paths(self):
+        a, _ = self.duplicates()
+        self.bridge.selectPreviewFile(str(a))
+        self.bridge._record_removed(str(a))
+        other = self.root / "other"
+        other.mkdir()
+        self.bridge.setSelectedFolder(str(other))
+        self.assertEqual(self.bridge.get_duplicate_groups(), [])
+        self.assertEqual(self.bridge.get_deleted_paths(), [])
+        self.assertEqual(self.bridge.get_preview_data()["path"], "")
+        self.assertEqual(self.bridge.get_scan_summary()["phase"], "Ready")
+        self.assertEqual(self.bridge.get_magic_cleanup_candidate_count(), 0)
+
+    def test_scan_preferences_survive_bridge_restart(self):
+        self.bridge.setSelectedFolder(str(self.root))
+        self.bridge.startScan()
+        self.wait_scan()
+        self.bridge.setIgnoreEmptyFiles(False)
+        self.bridge.setIncludeSubfolders(False)
+        self.bridge.setUseDuplicateSearchLimit(False)
+        self.bridge.setDuplicateSearchLimitText("27")
+        self.bridge.addIgnoreFileExtension("TXT")
+        self.bridge.setUseIgnoreFileExtensions(True)
+        self.bridge.setOnlySearchFileExtensionText("bin")
+        self.settings.sync()
+
+        settings = QSettings(str(self.root / "settings.ini"), QSettings.IniFormat)
+        with patch("duplicate_cleaner.bridge.QSettings", return_value=settings):
+            reloaded = AppBridge()
+        self.addCleanup(reloaded.shutdown)
+        self.assertFalse(reloaded.get_ignore_empty_files())
+        self.assertFalse(reloaded.get_include_subfolders())
+        self.assertFalse(reloaded.get_use_duplicate_search_limit())
+        self.assertEqual(reloaded.get_duplicate_search_limit(), 27)
+        self.assertEqual(reloaded.get_ignore_file_extensions(), [".txt"])
+        self.assertTrue(reloaded.get_use_ignore_file_extensions())
+        self.assertEqual(reloaded.get_only_search_file_extension(), ".bin")
+        self.assertEqual(reloaded.get_recent_folders()[0], str(self.root))
+
+    def test_invalid_folder_pattern_keeps_existing_settings(self):
+        self.bridge.addIgnoreFolderPattern(r"/safe/")
+        self.bridge.addIgnoreFolderPattern("[")
+        self.assertEqual(self.bridge.get_ignore_folder_patterns(), [r"/safe/"])
+        self.assertIn("Invalid folder regex", self.bridge.get_status_text())
+
+    def test_smart_cleanup_excludes_other_folders_and_dissimilar_names(self):
+        names = ("copy.txt", "copy (1).txt", "unrelated.txt", "nested/copy (2).txt")
+        for name in names:
+            path = self.root / name
+            path.parent.mkdir(exist_ok=True)
+            path.write_bytes(b"same")
+        os.utime(self.root / "copy.txt", (100, 100))
+        os.utime(self.root / "copy (1).txt", (200, 200))
+        os.utime(self.root / "unrelated.txt", (300, 300))
+        self.bridge._complete_scan(scan_for_duplicates(self.root))
+        self.assertEqual(self.bridge._collect_magic_cleanup_candidates(), [str(self.root / "copy (1).txt")])
+
+    def test_stop_scan_finishes_with_stopped_state(self):
+        entered = Event()
+
+        def wait_until_cancelled(folder, *, should_cancel, **_options):
+            entered.set()
+            deadline = time.monotonic() + 5
+            while not should_cancel() and time.monotonic() < deadline:
+                time.sleep(0.005)
+            if not should_cancel():
+                raise AssertionError("Scan worker did not receive cancellation")
+            return scan_for_duplicates(folder, should_cancel=lambda: True)
+
+        self.bridge.setSelectedFolder(str(self.root))
+        with patch("duplicate_cleaner.bridge.scan_for_duplicates", side_effect=wait_until_cancelled):
+            self.bridge.startScan()
+            self.assertTrue(entered.wait(2))
+            self.bridge.stopScan()
+            self.assertTrue(self.bridge.get_is_cancelling())
+            self.wait_scan()
+        self.assertEqual(self.bridge.get_scan_summary()["phase"], "Stopped")
+        self.assertEqual(self.bridge.get_duplicate_groups(), [])
+        self.assertFalse(self.bridge.get_is_cancelling())
+
+    def test_scan_failure_clears_worker_state(self):
+        self.bridge.setSelectedFolder(str(self.root))
+        with patch("duplicate_cleaner.bridge.scan_for_duplicates", side_effect=PermissionError("access denied")):
+            self.bridge.startScan()
+            self.wait_scan()
+        self.assertEqual(self.bridge.get_scan_summary()["phase"], "Failed")
+        self.assertIn("access denied", self.bridge.get_status_text())
+        self.assertIsNone(self.bridge._scan_worker)
 
     def test_thread_finishes_and_shutdown_cancels(self):
         self.duplicates()

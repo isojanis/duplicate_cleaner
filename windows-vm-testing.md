@@ -48,7 +48,7 @@ The script:
 5. Runs **`validate-portable.ps1`** automatically, which:
    - Verifies the SHA-256 checksum
    - Extracts to a temp path with **spaces and Unicode** in its name
-   - Checks all required files are present (`DuplicateCleaner.exe`, `LICENSE`, `README.md`, QML assets)
+   - Checks all required files are present (`DuplicateCleaner.exe`, `LICENSE`, `THIRD_PARTY_NOTICES`, `README.md`, QML assets)
    - Runs `--smoke-test` (starts the app, waits up to 60s, checks exit code)
 
 If it ends with:

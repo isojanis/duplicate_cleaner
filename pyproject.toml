@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,17 @@ version = "0.1.0"
 description = "Linux and Windows duplicate file cleaner built with PySide6 and Qt Quick."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Utilities",
+]
 dependencies = ["PySide6>=6.8,<7; sys_platform == 'win32'"]
 
 [project.gui-scripts]
@@ -18,6 +29,7 @@ dev = [
   "debugpy>=1.8",
   "build>=1.2",
 ]
+test = ["PySide6>=6.8,<7"]
 portable = ["PySide6>=6.8,<7"]
 windows-build = ["PyInstaller>=6.11,<7"]
 

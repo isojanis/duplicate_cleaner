@@ -2,7 +2,10 @@ Third-Party Notices — Duplicate Cleaner
 ========================================
 
 This application uses the following third-party software. Each component is
-governed by its own license, which is reproduced or referenced below.
+governed by its own license. This file is an index of license and source links;
+it is not a complete collection of the license and copyright texts bundled
+with every platform-specific binary. Review the resolved distribution contents
+and include the applicable full notices before publishing a binary release.
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -52,12 +55,12 @@ MIT License under which Duplicate Cleaner is released.
 Build-time tools (not distributed with the application)
 ────────────────────────────────────────────────────────────────────────────────
 
-The following tools are used only during development or packaging and are not
-included in any distributed artifact:
+The following tools are used during development or packaging. PyInstaller
+also contributes a bootloader to the portable Windows executable:
 
   PyInstaller  — GPLv2+ with a special exception that allows bundling of
-                 non-GPL application code. Not distributed; used only to
-                 produce the portable Windows executable.
+                 non-GPL application code. Its bootloader is included in
+                 the portable Windows executable.
                  https://pyinstaller.org/en/stable/license.html
 
   setuptools   — MIT License

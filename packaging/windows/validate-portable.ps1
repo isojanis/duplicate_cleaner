@@ -18,6 +18,7 @@ try {
     foreach ($RelativePath in @(
         'DuplicateCleaner.exe',
         '_internal/LICENSE',
+        '_internal/THIRD_PARTY_NOTICES',
         '_internal/README.md',
         '_internal/duplicate_cleaner/resources/qml/Main.qml',
         '_internal/duplicate_cleaner/resources/qml/components/ResultsPane.qml',

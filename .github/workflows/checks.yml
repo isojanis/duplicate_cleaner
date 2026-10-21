@@ -27,6 +27,7 @@ jobs:
           DUPLICATE_CLEANER_TEST_TRASH: ${{ runner.os == 'Windows' && '1' || '0' }}
       - run: python -m duplicate_cleaner --smoke-test
       - run: python -m build
+      - run: python packaging/check_distributions.py dist
       - name: Validate built wheel outside checkout
         shell: bash
         run: |

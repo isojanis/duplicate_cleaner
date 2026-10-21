@@ -37,7 +37,7 @@ install -Dm0644 packaging/assets/duplicate-cleaner.svg %{buildroot}%{_datadir}/i
 desktop-file-validate packaging/rpm/duplicate-cleaner.desktop
 
 %files
-%doc README.md
+%doc README.md THIRD_PARTY_NOTICES
 %license LICENSE
 %{_bindir}/duplicate-cleaner
 %{python3_sitelib}/duplicate_cleaner/

@@ -1,5 +1,6 @@
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,7 +11,6 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 from duplicate_cleaner.app import _resolve_main_qml
 from duplicate_cleaner.bridge import AppBridge
-from duplicate_cleaner.scanner import scan_for_duplicates
 
 
 class QmlTests(unittest.TestCase):
@@ -33,7 +33,18 @@ class QmlTests(unittest.TestCase):
             root.setProperty("scanSummaryExpanded", True)
             for name in ("a.txt", "b.txt"):
                 (Path(tmp) / name).write_text("Preview content")
-            bridge._complete_scan(scan_for_duplicates(Path(tmp)))
+            bridge.setSelectedFolder(tmp)
+            app.processEvents()
+            scan_button = root.findChild(QObject, "scanButton")
+            self.assertIsNotNone(scan_button)
+            scan_button.clicked.emit()
+            deadline = time.monotonic() + 10
+            while bridge.get_is_scanning() and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(0.005)
+            self.assertFalse(bridge.get_is_scanning())
+            self.assertEqual(bridge.get_scan_summary()["phase"], "Complete")
+            self.assertEqual(bridge.get_scan_summary()["duplicateFiles"], 2)
             bridge.selectPreviewFile(str(Path(tmp) / "a.txt"))
             app.processEvents()
             # Context deprecations are Qt log messages, not engine.warnings.

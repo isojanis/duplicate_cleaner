@@ -18,7 +18,7 @@ class WindowsArchiveTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             archive = Path(tmp) / "DuplicateCleaner-test.zip"
             files = (
-                "DuplicateCleaner.exe", "_internal/LICENSE", "_internal/README.md",
+                "DuplicateCleaner.exe", "_internal/LICENSE", "_internal/THIRD_PARTY_NOTICES", "_internal/README.md",
                 "_internal/duplicate_cleaner/resources/qml/Main.qml",
                 "_internal/duplicate_cleaner/resources/qml/components/ResultsPane.qml",
                 "_internal/duplicate_cleaner/resources/assets/duplicate-cleaner.svg",
@@ -43,6 +43,9 @@ class WindowsArchiveTests(unittest.TestCase):
 
     def test_missing_license_is_rejected_before_launch(self):
         self.assertIn("missing _internal/LICENSE", self.validate_fixture(missing="_internal/LICENSE"))
+
+    def test_missing_notices_are_rejected_before_launch(self):
+        self.assertIn("missing _internal/THIRD_PARTY_NOTICES", self.validate_fixture(missing="_internal/THIRD_PARTY_NOTICES"))
 
     def test_missing_qml_is_rejected_before_launch(self):
         path = "_internal/duplicate_cleaner/resources/qml/Main.qml"

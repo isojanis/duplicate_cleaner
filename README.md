@@ -50,7 +50,7 @@ python -m pip install -r packaging/windows/requirements-build.txt
 
 The script requires an x64 Python 3.13 interpreter and writes `dist/DuplicateCleaner-<version>-windows-x64.zip` with a `.sha256` sidecar. It verifies the checksum and required files, extracts to a temporary path with spaces and Unicode outside the checkout, and runs the extracted executable's startup smoke check with development Python/QML paths cleared. To select Python without activating the environment, pass `-Python .\.venv-build\Scripts\python.exe` to `build.ps1`.
 
-The bundle includes the project README and license. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Fill in the license template and review bundled third-party license notices before distribution, including the applicable [Qt for Python license terms](https://doc.qt.io/qtforpython-6/commercial/index.html). Native Windows acceptance testing is required before release.
+The bundle includes the project README, MIT license, and third-party notice index. Extract the **whole folder** and launch `DuplicateCleaner.exe`; Python and KDE are not needed on the destination machine. This is a portable distribution, not an installer. Builds are unsigned. Review the bundled components and collect their complete applicable license and copyright texts before public distribution, including the [Qt for Python license terms](https://doc.qt.io/qtforpython-6/commercial/index.html). Native Windows acceptance testing is required before release.
 
 To validate an existing archive on Windows, keep its `.sha256` file beside it and run:
 
@@ -60,9 +60,10 @@ To validate an existing archive on Windows, keep its `.sha256` file beside it an
 
 ## Tests and packages
 
-With Qt installed:
+In an isolated virtual environment, install the test extras:
 
 ```sh
+python -m pip install -e ".[test,dev]"
 python -m unittest discover -s tests -v
 python -m duplicate_cleaner --smoke-test
 python -m pip install build
@@ -73,10 +74,10 @@ On headless Linux use `QT_QPA_PLATFORM=offscreen` and, when needed, `QT_QUICK_BA
 
 Trash operations are mocked by default. The Windows CI matrix explicitly sets `DUPLICATE_CLEANER_TEST_TRASH=1` to enable the Recycle Bin integration test: it moves one newly created, disposable test file to the Recycle Bin and verifies the surviving copy is retained. Set that environment variable when running native acceptance tests locally as well. The generated test file can remain in the Recycle Bin afterward.
 
-Both wheels and source archives include the interface and icon. On a Fedora RPM build host with the spec's BuildRequires installed, run `sh packaging/rpm/build-rpm.sh`. The script builds a source archive from the manifest, avoiding virtual environments and existing build output, then places RPMs under `dist/rpm/RPMS/`. RPM installs package-local UI assets along with the desktop entry, icon, and license file. The RPM spec is Fedora-style and still needs validation on a native RPM host. `LICENSE` is an MIT template with placeholder copyright fields; fill those in before public distribution.
+Both wheels and source archives include the interface and icon. On a Fedora RPM build host with the spec's BuildRequires installed, run `sh packaging/rpm/build-rpm.sh`. The script builds a source archive from the manifest, avoiding virtual environments and existing build output, then places RPMs under `dist/rpm/RPMS/`. RPM installs package-local UI assets along with the desktop entry, icon, and license file. The RPM spec is Fedora-style and still needs validation on a native RPM host. `LICENSE` contains the project MIT grant and copyright notice. `THIRD_PARTY_NOTICES` is a notice index; the platform-specific dependency licenses still need review before public distribution.
 
 GitHub Actions defines Linux/Windows tests, installed-wheel startup checks, and a Windows executable artifact build. These workflows must pass on the remote runners; adding the workflow does not mean it has already run. The Windows artifact job produces a versioned ZIP and SHA-256 sidecar; it does not publish a GitHub Release.
 
-See [PLAN.md](PLAN.md) for milestones and [NOTES.md](NOTES.md) for verified status and remaining release checks.
+See [TEST_PLAN.md](TEST_PLAN.md) for coverage and manual checks, [SECURITY.md](SECURITY.md) for the security policy, and [NOTES.md](NOTES.md) for verified status and remaining release checks.
 
 Packaging references: [Qt deployment](https://doc.qt.io/qtforpython-6/deployment/deployment-pyinstaller.html), [PyInstaller hooks](https://pyinstaller.org/en/stable/hooks.html), and [Qt Trash support](https://doc.qt.io/qtforpython-6/PySide6/QtCore/QFile.html).
