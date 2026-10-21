@@ -44,7 +44,3 @@ desktop-file-validate packaging/rpm/duplicate-cleaner.desktop
 %{python3_sitelib}/duplicate_cleaner-*.dist-info/
 %{_datadir}/applications/duplicate-cleaner.desktop
 %{_datadir}/icons/hicolor/scalable/apps/duplicate-cleaner.svg
-
-%changelog
-* Sun Mar 15 2026 Codex <codex@example.invalid> - 0.1.0-1
-- Initial RPM packaging

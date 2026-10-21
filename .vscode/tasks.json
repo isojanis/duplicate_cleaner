@@ -9,7 +9,9 @@
         "--host",
         "sh",
         "-lc",
-        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && .venv/bin/python -m ensurepip --upgrade && .venv/bin/python -m pip install debugpy && .venv/bin/python -m pip install -e . --no-deps"
+        "cd \"$1\" && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && .venv/bin/python -m ensurepip --upgrade && .venv/bin/python -m pip install debugpy && .venv/bin/python -m pip install -e . --no-deps",
+        "sh",
+        "${workspaceFolder}"
       ],
       "presentation": {
         "reveal": "always",
@@ -25,7 +27,9 @@
         "--host",
         "sh",
         "-lc",
-        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -m duplicate_cleaner"
+        "cd \"$1\" && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -m duplicate_cleaner",
+        "sh",
+        "${workspaceFolder}"
       ],
       "presentation": {
         "reveal": "always",
@@ -41,7 +45,9 @@
         "--host",
         "sh",
         "-lc",
-        "cd /home/isojanis/development/duplicate_cleaner && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -Xfrozen_modules=off /home/isojanis/development/duplicate_cleaner/.vscode/debug_host.py"
+        "cd \"$1\" && if [ ! -x .venv/bin/python ]; then python3 -m venv --system-site-packages .venv; fi && (.venv/bin/python -m pip show debugpy >/dev/null 2>&1 || .venv/bin/python -m pip install debugpy) && PYTHONPATH=src .venv/bin/python -Xfrozen_modules=off \"$1/.vscode/debug_host.py\"",
+        "sh",
+        "${workspaceFolder}"
       ],
       "isBackground": true,
       "presentation": {
